@@ -1,6 +1,8 @@
 import importlib.util
 from pathlib import Path
 import tempfile
+import subprocess
+import sys
 import unittest
 
 spec = importlib.util.spec_from_file_location("collect", Path(__file__).parents[1] / "skills/project-briefing/scripts/collect.py")
@@ -80,14 +82,87 @@ class CollectorTests(unittest.TestCase):
         def fetch(url):
             requested.append(url)
             if url=="repos/org/repo": return {"default_branch":"main"}
-            if "/pulls?state=open" in url:
+            if "/pulls?state=all" in url:
                 return [{"number":n,"updated_at":"2026-11-11T00:00:00Z"} for n in range(3)]
             return []
-        with self.assertRaisesRegex(RuntimeError,"3 open PRs.*above --max-prs 2"):
+        with self.assertRaisesRegex(RuntimeError,"Read budget exceeded.*more than 2 records"):
             c.collect(self.db,"org/repo","2026-11-10T00:00:00Z","2026-11-11T00:00:00Z",fetch=fetch,max_prs=2)
         self.assertFalse(any("/comments" in url or "/files" in url or "/reviews" in url for url in requested))
         self.assertEqual(self.db.execute("SELECT count(*) FROM objects").fetchone()[0],0)
-    def test_open_inventory_and_closed_reconciliation(self):
+    def test_discovery_stops_at_old_pr_without_reading_dormant_backlog(self):
+        calls = []
+        def fetch(url):
+            calls.append(url)
+            if url == "repos/org/repo": return {"default_branch": "main"}
+            if "/pulls?" in url:
+                return [{"number": n, "updated_at": "2020-01-01T00:00:00Z"} for n in range(100)]
+            return []
+        records = c.collect(self.db, "org/repo", "2026-11-10T00:00:00Z",
+                            "2026-11-11T00:00:00Z", fetch=fetch)
+        self.assertEqual(records, [])
+        self.assertEqual(len([url for url in calls if "/pulls?" in url]), 1)
+        self.assertFalse(any("/pulls/" in url for url in calls))
+
+    def test_paginated_evidence_overflow_is_not_silently_truncated(self):
+        calls = []
+        def fetch(url):
+            calls.append(url)
+            return [{"id": n} for n in range(100)]
+        with self.assertRaisesRegex(RuntimeError, "Read budget exceeded"):
+            c.pages("comments", fetch=fetch)
+        self.assertEqual(len(calls), 11)
+
+    def test_old_draft_and_edited_release_survive_incremental_windows(self):
+        release = {"id": 1, "created_at": "2020-01-01T00:00:00Z",
+                   "published_at": None, "body": "draft"}
+        def fetch(url):
+            if url == "repos/org/repo": return {"default_branch": "main"}
+            if "/releases?" in url: return [dict(release)]
+            return []
+        def collector(db, repo, since, until, reconcile):
+            return c.collect(db, repo, since, until, reconcile, fetch=fetch)
+        _, count = c.refresh(self.db, "org/repo", collector=collector)
+        self.assertEqual(count, 1)
+        release.update(published_at="2020-01-02T00:00:00Z", body="edited notes")
+        _, changed = c.refresh(self.db, "org/repo", collector=collector)
+        self.assertEqual(changed, 1)
+        _, duplicate = c.refresh(self.db, "org/repo", collector=collector)
+        self.assertEqual(duplicate, 0)
+
+    def test_unbriefed_run_survives_no_change_refresh_and_delivery_uncertainty(self):
+        collector = lambda *a: [("commit", "abc", {"sha": "abc"})]
+        first, _ = c.refresh(self.db, "org/repo", collector=collector)
+        c.refresh(self.db, "org/repo", collector=collector)
+        self.assertIn(first, [p["run"] for p in c.pending_outputs(self.db, "org/repo")])
+        self.assertEqual(c.pending_outputs(self.db, "org/other"), [])
+        briefing = Path(self.tmp.name) / "briefing.md"
+        briefing.write_text("Meaningful change with evidence.")
+        c.record_output(self.db, "org/repo", first, briefing, "uncertain")
+        self.assertIn(first, [p["run"] for p in c.pending_outputs(self.db, "org/repo")])
+        c.record_output(self.db, "org/repo", first, briefing, "confirmed")
+        self.assertNotIn(first, [p["run"] for p in c.pending_outputs(self.db, "org/repo")])
+        with self.assertRaises(ValueError):
+            c.record_output(self.db, "org/other", first, briefing, "confirmed")
+        with self.assertRaises(ValueError):
+            c.record_output(self.db, "org/repo", first, briefing.with_name("missing"), "confirmed")
+
+    def test_pending_cli_repairs_interrupted_ledger_without_network(self):
+        root = Path(self.tmp.name)
+        db = c.connect(root / "activity.sqlite")
+        run, _ = c.refresh(db, "org/repo", collector=lambda *a: [
+            ("commit", "abc", {"html_url": "https://github.com/org/repo/commit/abc",
+                              "commit": {"message": "A meaningful change"}})])
+        db.close()
+        ledger = root / f"run-{run}.md"
+        for partial in ("", "# org/repo: base"):
+            ledger.write_text(partial)
+            result = subprocess.run([sys.executable, c.__file__, "--repo", "org/repo",
+                                     "--state-dir", str(root), "--pending"],
+                                    check=True, capture_output=True, text=True)
+            self.assertIn("A meaningful change", ledger.read_text())
+            self.assertEqual(c.json.loads(result.stdout)["pending_outputs"][0]["run"], run)
+
+    def test_dormant_tracked_pr_requires_explicit_reconciliation(self):
         old = {"pr":{"state":"open","updated_at":"old","head":{"sha":"a"}}}
         c.refresh(self.db,"org/repo",collector=lambda *a:[("pr","1",old)])
         closed = {"number":1,"state":"closed","updated_at":"new","head":{"sha":"b"}}
@@ -98,6 +173,9 @@ class CollectorTests(unittest.TestCase):
             if url=="repos/org/repo/pulls/1": return closed
             return []
         records=c.collect(self.db,"org/repo","2026-11-10T00:00:00Z","2026-11-11T00:00:00Z",fetch=fetch)
+        self.assertEqual(records, [])
+        self.assertNotIn("repos/org/repo/pulls/1", called)
+        records=c.collect(self.db,"org/repo","2026-11-10T00:00:00Z","2026-11-11T00:00:00Z",reconcile=True,fetch=fetch)
         self.assertEqual(records[0][2]["pr"]["state"],"closed")
         self.assertTrue(any("/pulls/1/comments" in url for url in called))
 

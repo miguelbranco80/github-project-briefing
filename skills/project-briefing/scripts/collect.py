@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import sqlite3
 import subprocess
+import tempfile
 import time
 import urllib.parse
 
@@ -24,7 +25,7 @@ def api(endpoint):
             raise RuntimeError(f"GitHub read failed: {endpoint}: {p.stderr.strip()}")
         time.sleep(2 ** attempt)
 
-def pages(endpoint, stop=None, fetch=api):
+def pages(endpoint, stop=None, fetch=api, max_items=1000):
     result = []
     for page in range(1, 1001):
         sep = "&" if "?" in endpoint else "?"
@@ -34,6 +35,8 @@ def pages(endpoint, stop=None, fetch=api):
         for item in batch:
             if stop and stop(item):
                 return result
+            if len(result) >= max_items:
+                raise RuntimeError(f"Read budget exceeded: {endpoint}; more than {max_items} records. PR discovery uses --max-prs; other evidence streams have a fixed cap. No checkpoint advanced.")
             result.append(item)
         if len(batch) < 100:
             return result
@@ -45,6 +48,9 @@ def connect(path):
     CREATE TABLE IF NOT EXISTS runs(
       id INTEGER PRIMARY KEY, repo TEXT NOT NULL, started TEXT NOT NULL,
       finished TEXT, status TEXT NOT NULL, since TEXT NOT NULL, error TEXT);
+    CREATE TABLE IF NOT EXISTS run_outputs(
+      run_id INTEGER PRIMARY KEY, briefing_path TEXT NOT NULL,
+      delivery_status TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS objects(
       repo TEXT, kind TEXT, key TEXT, digest TEXT NOT NULL, payload TEXT NOT NULL,
       PRIMARY KEY(repo,kind,key));
@@ -74,16 +80,20 @@ def save(db, run, repo, records):
 def collect(db, repo, since, until, reconcile=False, fetch=api, max_prs=100):
     base = f"repos/{repo}"
     metadata = fetch(base)
-    # Complete open inventory plus updated closed/merged inventory; no Search API cap.
-    opened = pages(f"{base}/pulls?state=open&sort=updated&direction=desc", fetch=fetch)
-    recent = pages(f"{base}/pulls?state=closed&sort=updated&direction=desc",
-                   stop=lambda p: p["updated_at"] < since, fetch=fetch)
-    prs = {str(p["number"]): p for p in opened + recent}
+    # Updated order lets discovery stop at the window boundary or budget,
+    # without enumerating the repository's dormant open backlog.
+    recent = pages(f"{base}/pulls?state=all&sort=updated&direction=desc",
+                   stop=lambda p: p["updated_at"] < since,
+                   fetch=fetch, max_items=max_prs)
+    prs = {str(p["number"]): p for p in recent}
     previous = {key: json.loads(body) for key, body in db.execute(
         "SELECT key,payload FROM objects WHERE repo=? AND kind='pr'", (repo,))}
-    for key, old in previous.items():
-        if key not in prs and old["pr"]["state"] == "open":
-            prs[key] = fetch(f"{base}/pulls/{key}")
+    if reconcile:
+        for key, old in previous.items():
+            if key not in prs and old["pr"]["state"] == "open":
+                if len(prs) >= max_prs:
+                    raise RuntimeError(f"Reconciliation exceeds --max-prs {max_prs}. No conversations fetched; no checkpoint advanced.")
+                prs[key] = fetch(f"{base}/pulls/{key}")
 
     def detail(pair):
         key, p = pair
@@ -93,16 +103,11 @@ def collect(db, repo, since, until, reconcile=False, fetch=api, max_prs=100):
         # Fetch detail first; activity arriving afterward is picked up by overlap next run.
         p = fetch(f"{base}/pulls/{key}")
         files = pages(f"{base}/pulls/{key}/files", fetch=fetch)
-        if len(files) >= 3000:
-            raise RuntimeError(f"PR {key}: GitHub file-list cap; cannot claim complete coverage")
         result = {"pr": p, "files": files,
                   "comments": pages(f"{base}/issues/{key}/comments", fetch=fetch),
                   "reviews": pages(f"{base}/pulls/{key}/reviews", fetch=fetch),
                   "review_comments": pages(f"{base}/pulls/{key}/comments", fetch=fetch)}
         return "pr", key, result
-
-    if len(prs) > max_prs:
-        raise RuntimeError(f"Preflight: {len(opened)} open PRs, {len(recent)} recently updated closed PRs; {len(prs)} unique PRs require coverage, above --max-prs {max_prs}. No PR conversations fetched. Narrow the project scope or explicitly raise --max-prs. No checkpoint advanced.")
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         records = list(pool.map(detail, prs.items()))
@@ -111,7 +116,8 @@ def collect(db, repo, since, until, reconcile=False, fetch=api, max_prs=100):
     records.extend(("commit", c["sha"], c) for c in commits)
     # Releases are not sorted by update time, so enumerate and filter locally.
     releases = pages(f"{base}/releases", fetch=fetch)
-    records.extend(("release", str(r["id"]), r) for r in releases if r["created_at"] >= since or r.get("published_at", "") >= since)
+    # Already enumerated: retain all releases so old edits and nullable draft dates work.
+    records.extend(("release", str(r["id"]), r) for r in releases)
     return records
 
 def clean(value):
@@ -123,9 +129,9 @@ def render(db, run):
     prior = db.execute("SELECT count(*) FROM runs WHERE repo=? AND status='complete' AND id<?", (repo,run)).fetchone()[0]
     lines = [f"# {repo}: {'baseline' if not prior else 'changes'}", "",
              f"Run {run}; status: {status}; started: {started}; finished: {finished or 'not completed'}.",
-             f"Window starts {since}. Includes all currently open PRs, recently updated closed PRs, default-branch commits and releases.",
+             f"Window starts {since}. Includes PRs updated in the window (not the entire open backlog), default-branch commits in the window, and current releases. Reconciliation may also revisit previously tracked open PRs.",
              "PR issue comments, reviews, inline comments and changed paths are captured. GitHub Discussions, ordinary issues, CI, RFC file contents, and deployment proof are NOT covered.",
-             "Incremental scans reuse unchanged PRs; use --reconcile to re-fetch all tracked open/recent PR conversations. GitHub is not a transactional snapshot.", ""]
+             "Incremental scans reuse unchanged PRs; use --reconcile to re-fetch recent and previously tracked open PR conversations. Each paginated evidence stream is limited to 1,000 records; exceeding a limit fails the scan. GitHub is not a transactional snapshot.", ""]
     if status != "complete":
         return "\n".join(lines + [f"Coverage incomplete: {clean(error)}. Last successful checkpoint retained.", ""])
     groups = {"Merged PRs": [], "Open PRs / updates": [], "Closed without merge": [], "Default-branch commits": [], "Releases": []}
@@ -178,14 +184,54 @@ def refresh(db, repo, days=7, reconcile=False, collector=collect):
             db.execute("UPDATE runs SET status='failed',finished=?,error=? WHERE id=?", (now(),str(exc),run))
         raise
 
+def write_ledger(db, run, path):
+    body = render(db, run)
+    with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as temp:
+        temp_path = Path(temp.name)
+        try:
+            temp.write(body)
+            temp.close()
+            temp_path.replace(path)
+        finally:
+            temp_path.unlink(missing_ok=True)
+
+def pending_outputs(db, repo):
+    return [{"run": run, "briefing_path": path, "delivery_status": status or "pending"}
+            for run, path, status in db.execute("""
+              SELECT r.id, o.briefing_path, o.delivery_status FROM runs r
+              LEFT JOIN run_outputs o ON o.run_id=r.id
+              WHERE r.repo=? AND r.status='complete'
+                AND (o.run_id IS NULL OR o.delivery_status NOT IN ('confirmed','not_needed'))
+              ORDER BY r.id""", (repo,))]
+
+def record_output(db, repo, run, path, delivery_status):
+    if delivery_status not in {"pending", "confirmed", "uncertain", "not_needed"}:
+        raise ValueError("Invalid delivery status")
+    row = db.execute("SELECT status FROM runs WHERE id=? AND repo=?", (run, repo)).fetchone()
+    if not row or row[0] != "complete":
+        raise ValueError("Output must reference a complete run for this repository")
+    if not path.is_file() or not path.read_text().strip():
+        raise ValueError("A nonempty saved briefing is required")
+    with db:
+        db.execute("INSERT OR REPLACE INTO run_outputs VALUES(?,?,?)",
+                   (run, str(path.resolve()), delivery_status))
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", required=True)
     parser.add_argument("--state-dir", type=Path, required=True)
     parser.add_argument("--days", type=int, default=7)
     parser.add_argument("--reconcile", action="store_true")
-    parser.add_argument("--max-prs", type=int, default=100, help="Stop before fetching conversations if the discovered PR inventory exceeds this count")
+    parser.add_argument("--max-prs", type=int, default=100, help="Maximum recently updated PRs; discovery stops on overflow before conversation reads")
+    parser.add_argument("--pending", action="store_true", help="Recover ledgers and list unbriefed/unconfirmed runs without GitHub access")
+    parser.add_argument("--record-output", type=int, metavar="RUN", help="Record a saved briefing and its observed delivery status")
+    parser.add_argument("--briefing-path", type=Path)
+    parser.add_argument("--delivery-status", choices=["pending", "confirmed", "uncertain", "not_needed"], default="pending")
     args = parser.parse_args()
+    if args.pending and args.record_output is not None:
+        parser.error("--pending and --record-output are mutually exclusive")
+    if args.record_output is not None and args.briefing_path is None:
+        parser.error("--record-output requires --briefing-path")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo) or args.days < 1 or args.max_prs < 1:
         parser.error("Use owner/repository and positive --days / --max-prs")
     args.state_dir.mkdir(parents=True, exist_ok=True)
@@ -194,6 +240,21 @@ def main():
     with (args.state_dir / "collect.lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         db = connect(args.state_dir / "activity.sqlite")
+        if args.record_output is not None:
+            path = args.briefing_path.resolve()
+            if not path.is_relative_to(args.state_dir.resolve()):
+                parser.error("--briefing-path must be inside --state-dir")
+            record_output(db, args.repo, args.record_output, path, args.delivery_status)
+            print(json.dumps({"pending_outputs": pending_outputs(db, args.repo)}))
+            return
+        # Restore missing ledgers before a new scan; collection success is not delivery.
+        for (complete_run,) in db.execute("SELECT id FROM runs WHERE repo=? AND status='complete'", (args.repo,)):
+            ledger = args.state_dir / f"run-{complete_run}.md"
+            if not ledger.exists() or ledger.read_text() != render(db, complete_run):
+                write_ledger(db, complete_run, ledger)
+        if args.pending:
+            print(json.dumps({"pending_outputs": pending_outputs(db, args.repo)}))
+            return
         try:
             run, count = refresh(db, args.repo, args.days, args.reconcile,
                                  collector=lambda db, repo, since, until, reconcile: collect(
@@ -201,13 +262,13 @@ def main():
         except Exception:
             run = db.execute("SELECT max(id) FROM runs").fetchone()[0]
             report = args.state_dir / f"run-{run}.md"
-            report.write_text(render(db,run))
+            write_ledger(db, run, report)
             error = db.execute("SELECT error FROM runs WHERE id=?", (run,)).fetchone()[0]
             print(json.dumps({"run":run,"status":"failed","error":error,"report":str(report)}))
             raise SystemExit(1)
         report = args.state_dir / f"run-{run}.md"
-        report.write_text(render(db,run))
-        print(json.dumps({"run":run,"changed_records":count,"report":str(report),"status":"complete"}))
+        write_ledger(db, run, report)
+        print(json.dumps({"run":run,"changed_records":count,"report":str(report),"status":"complete", "pending_outputs":pending_outputs(db, args.repo)}))
 
 if __name__ == "__main__":
     main()

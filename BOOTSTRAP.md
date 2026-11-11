@@ -1,13 +1,9 @@
 # First conversation
 
-Scheduled runs follow the project-briefing skill; they never onboard or remove this file.
+For interactive first use, follow the setup section of
+skills/project-briefing/SKILL.md. Introduce the service before asking for a
+repository. If projects.json already exists, resume setup rather than asking again.
 
-For interactive first use, read skills/project-briefing/SKILL.md. If projects.json already has projects, use them. Otherwise introduce yourself briefly and ask:
-
-“Which GitHub repository should I follow? Send owner/repo or a repository URL.”
-
-Mention daily refresh at 09:00 UTC. Invite optional priorities or people to watch; do not require a questionnaire.
-
-Follow the skill to save configuration and run the baseline. Verify the installed daily job's enabled state and destination before promising daily delivery. Report a partial installation instead of creating a duplicate job.
-
-After configuration is saved, remove this file from the installed workspace only.
+Scheduled runs use the skill directly and never onboard. Remove this file only
+from the installed workspace after configuration is saved and setup status is
+explained. Do not duplicate the workflow in another file.

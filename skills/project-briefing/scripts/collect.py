@@ -5,6 +5,7 @@ import concurrent.futures
 import datetime as dt
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import sqlite3
@@ -18,11 +19,14 @@ def now():
 
 def api(endpoint):
     for attempt in range(3):
-        p = subprocess.run(["gh", "api", endpoint], capture_output=True, text=True, timeout=90)
+        env = {k: v for k, v in os.environ.items() if not k.startswith("GH_DEBUG")}
+        env.update(GH_PROMPT_DISABLED="1", GH_PAGER="cat", NO_COLOR="1")
+        p = subprocess.run(["gh", "api", endpoint], capture_output=True, text=True, timeout=90, env=env)
         if p.returncode == 0:
             return json.loads(p.stdout)
         if not re.search(r"HTTP (429|5\d\d)", p.stderr) or attempt == 2:
-            raise RuntimeError(f"GitHub read failed: {endpoint}: {p.stderr.strip()}")
+            status = re.search(r"HTTP (\d{3})", p.stderr)
+            raise RuntimeError(f"GitHub read failed: {endpoint}: {status.group(0) if status else 'check gh authentication and repository access'}")
         time.sleep(2 ** attempt)
 
 def pages(endpoint, stop=None, fetch=api, max_items=1000):
@@ -98,15 +102,14 @@ def collect(db, repo, since, until, reconcile=False, fetch=api, max_prs=100):
     def detail(pair):
         key, p = pair
         old = previous.get(key)
-        if not reconcile and old and old["pr"]["updated_at"] == p["updated_at"] and old["pr"]["head"]["sha"] == p["head"]["sha"]:
+        if not reconcile and old and old["pr"]["updated_at"] == p["updated_at"] and old["pr"]["head"]["sha"] == p["head"]["sha"] and "files" not in old:
             return "pr", key, old
         # Fetch detail first; activity arriving afterward is picked up by overlap next run.
         p = fetch(f"{base}/pulls/{key}")
-        files = pages(f"{base}/pulls/{key}/files", fetch=fetch)
-        result = {"pr": p, "files": files,
+        result = {"pr": p,
                   "comments": pages(f"{base}/issues/{key}/comments", fetch=fetch),
                   "reviews": pages(f"{base}/pulls/{key}/reviews", fetch=fetch),
-                  "review_comments": pages(f"{base}/pulls/{key}/comments", fetch=fetch)}
+                  "review_comments": []}
         return "pr", key, result
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
@@ -130,7 +133,7 @@ def render(db, run):
     lines = [f"# {repo}: {'baseline' if not prior else 'changes'}", "",
              f"Run {run}; status: {status}; started: {started}; finished: {finished or 'not completed'}.",
              f"Window starts {since}. Includes PRs updated in the window (not the entire open backlog), default-branch commits in the window, and current releases. Reconciliation may also revisit previously tracked open PRs.",
-             "PR issue comments, reviews, inline comments and changed paths are captured. GitHub Discussions, ordinary issues, CI, RFC file contents, and deployment proof are NOT covered.",
+             "PR descriptions, issue comments and review summaries are captured; patches, changed files and inline diff comments are not fetched by default. GitHub Discussions, ordinary issues, CI, RFC file contents, and deployment proof are NOT covered.",
              "Incremental scans reuse unchanged PRs; use --reconcile to re-fetch recent and previously tracked open PR conversations. Each paginated evidence stream is limited to 1,000 records; exceeding a limit fails the scan. GitHub is not a transactional snapshot.", ""]
     if status != "complete":
         return "\n".join(lines + [f"Coverage incomplete: {clean(error)}. Last successful checkpoint retained.", ""])
@@ -139,8 +142,8 @@ def render(db, run):
         p = json.loads(after)
         if kind == "pr":
             pr = p["pr"]
-            paths = [f["filename"] for f in p["files"]]
-            rfc = any(re.search(r"(^|/)(rfcs?|proposals?)(/|[.-])", path, re.I) for path in paths)
+            paths = [f["filename"] for f in p.get("files", [])]
+            rfc = bool(re.search(r"\b(rfc|proposal|design)\b", pr["title"], re.I)) or any(re.search(r"(^|/)(rfcs?|proposals?)(/|[.-])", path, re.I) for path in paths)
             group = "Merged PRs" if pr.get("merged_at") else "Open PRs / updates" if pr["state"] == "open" else "Closed without merge"
             users = sorted({c.get("user", {}).get("login", "unknown") for name in ("comments","reviews","review_comments") for c in p[name] if c.get("user",{}).get("type") != "Bot"})
             tag = " **RFC/proposal paths touched; acceptance and implementation unverified.**" if rfc else ""
@@ -185,6 +188,10 @@ def refresh(db, repo, days=7, reconcile=False, collector=collect):
         raise
 
 def write_ledger(db, run, path):
+    # Preserve briefing paths registered by older versions, even ledger names.
+    if any(Path(saved).resolve() == path.resolve() for (saved,) in
+           db.execute("SELECT briefing_path FROM run_outputs")):
+        return
     body = render(db, run)
     with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as temp:
         temp_path = Path(temp.name)
@@ -201,8 +208,15 @@ def pending_outputs(db, repo):
               SELECT r.id, o.briefing_path, o.delivery_status FROM runs r
               LEFT JOIN run_outputs o ON o.run_id=r.id
               WHERE r.repo=? AND r.status='complete'
-                AND (o.run_id IS NULL OR o.delivery_status NOT IN ('confirmed','not_needed'))
+                AND o.run_id IS NULL
               ORDER BY r.id""", (repo,))]
+
+def delivery_outputs(db, repo):
+    return [{"run": run, "briefing_path": path, "delivery_status": status}
+            for run, path, status in db.execute("""
+              SELECT r.id,o.briefing_path,o.delivery_status FROM runs r
+              JOIN run_outputs o ON o.run_id=r.id WHERE r.repo=?
+              AND o.delivery_status IN ('pending','uncertain') ORDER BY r.id""", (repo,))]
 
 def record_output(db, repo, run, path, delivery_status):
     if delivery_status not in {"pending", "confirmed", "uncertain", "not_needed"}:
@@ -210,6 +224,8 @@ def record_output(db, repo, run, path, delivery_status):
     row = db.execute("SELECT status FROM runs WHERE id=? AND repo=?", (run, repo)).fetchone()
     if not row or row[0] != "complete":
         raise ValueError("Output must reference a complete run for this repository")
+    if re.fullmatch(r"run-\d+\.md", path.name):
+        raise ValueError("run-N.md filenames are reserved for activity ledgers; save briefing-N.md instead")
     if not path.is_file() or not path.read_text().strip():
         raise ValueError("A nonempty saved briefing is required")
     with db:
@@ -223,7 +239,7 @@ def main():
     parser.add_argument("--days", type=int, default=7)
     parser.add_argument("--reconcile", action="store_true")
     parser.add_argument("--max-prs", type=int, default=100, help="Maximum recently updated PRs; discovery stops on overflow before conversation reads")
-    parser.add_argument("--pending", action="store_true", help="Recover ledgers and list unbriefed/unconfirmed runs without GitHub access")
+    parser.add_argument("--pending", action="store_true", help="Recover ledgers and list separate writing and delivery queues offline")
     parser.add_argument("--record-output", type=int, metavar="RUN", help="Record a saved briefing and its observed delivery status")
     parser.add_argument("--briefing-path", type=Path)
     parser.add_argument("--delivery-status", choices=["pending", "confirmed", "uncertain", "not_needed"], default="pending")
@@ -245,7 +261,7 @@ def main():
             if not path.is_relative_to(args.state_dir.resolve()):
                 parser.error("--briefing-path must be inside --state-dir")
             record_output(db, args.repo, args.record_output, path, args.delivery_status)
-            print(json.dumps({"pending_outputs": pending_outputs(db, args.repo)}))
+            print(json.dumps({"pending_outputs": pending_outputs(db, args.repo), "delivery_outputs": delivery_outputs(db, args.repo)}))
             return
         # Restore missing ledgers before a new scan; collection success is not delivery.
         for (complete_run,) in db.execute("SELECT id FROM runs WHERE repo=? AND status='complete'", (args.repo,)):
@@ -253,7 +269,7 @@ def main():
             if not ledger.exists() or ledger.read_text() != render(db, complete_run):
                 write_ledger(db, complete_run, ledger)
         if args.pending:
-            print(json.dumps({"pending_outputs": pending_outputs(db, args.repo)}))
+            print(json.dumps({"pending_outputs": pending_outputs(db, args.repo), "delivery_outputs": delivery_outputs(db, args.repo)}))
             return
         try:
             run, count = refresh(db, args.repo, args.days, args.reconcile,
@@ -268,7 +284,7 @@ def main():
             raise SystemExit(1)
         report = args.state_dir / f"run-{run}.md"
         write_ledger(db, run, report)
-        print(json.dumps({"run":run,"changed_records":count,"report":str(report),"status":"complete", "pending_outputs":pending_outputs(db, args.repo)}))
+        print(json.dumps({"run":run,"changed_records":count,"report":str(report),"status":"complete", "pending_outputs":pending_outputs(db, args.repo), "delivery_outputs":delivery_outputs(db, args.repo)}))
 
 if __name__ == "__main__":
     main()

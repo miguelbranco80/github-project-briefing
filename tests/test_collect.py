@@ -138,7 +138,8 @@ class CollectorTests(unittest.TestCase):
         briefing = Path(self.tmp.name) / "briefing.md"
         briefing.write_text("Meaningful change with evidence.")
         c.record_output(self.db, "org/repo", first, briefing, "uncertain")
-        self.assertIn(first, [p["run"] for p in c.pending_outputs(self.db, "org/repo")])
+        self.assertNotIn(first, [p["run"] for p in c.pending_outputs(self.db, "org/repo")])
+        self.assertEqual(c.delivery_outputs(self.db, "org/repo")[0]["delivery_status"], "uncertain")
         c.record_output(self.db, "org/repo", first, briefing, "confirmed")
         self.assertNotIn(first, [p["run"] for p in c.pending_outputs(self.db, "org/repo")])
         with self.assertRaises(ValueError):
@@ -177,7 +178,40 @@ class CollectorTests(unittest.TestCase):
         self.assertNotIn("repos/org/repo/pulls/1", called)
         records=c.collect(self.db,"org/repo","2026-11-10T00:00:00Z","2026-11-11T00:00:00Z",reconcile=True,fetch=fetch)
         self.assertEqual(records[0][2]["pr"]["state"],"closed")
-        self.assertTrue(any("/pulls/1/comments" in url for url in called))
+        self.assertTrue(any("/issues/1/comments" in url for url in called))
 
 if __name__ == "__main__":
     unittest.main()
+
+class LightweightTests(unittest.TestCase):
+    def test_no_file_or_diff_reads_and_legacy_cache_is_refetched(self):
+        with tempfile.TemporaryDirectory() as root:
+            db = c.connect(Path(root) / 'test.sqlite')
+            pr = {'number':1,'state':'open','updated_at':'2026-11-11T00:00:00Z','head':{'sha':'a'}}
+            c.refresh(db,'org/repo',collector=lambda *a:[('pr','1',{'pr':pr,'files':[{'patch':'old'}]})])
+            calls=[]
+            def fetch(url):
+                calls.append(url)
+                if url=='repos/org/repo': return {'default_branch':'main'}
+                if '/pulls?' in url: return [pr]
+                if url=='repos/org/repo/pulls/1': return pr
+                return []
+            records=c.collect(db,'org/repo','2026-11-10','2026-11-12',fetch=fetch)
+            self.assertNotIn('files',records[0][2])
+            self.assertFalse(any('/files' in url or '/pulls/1/comments' in url for url in calls))
+            self.assertTrue(any('/reviews?' in url for url in calls))
+            db.close()
+
+class BriefingPathTests(unittest.TestCase):
+    def test_reserved_ledger_name_rejected_and_legacy_briefing_preserved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); db=c.connect(root/'activity.sqlite')
+            run,_=c.refresh(db,'org/repo',collector=lambda *a:[])
+            path=root/f'run-{run}.md'; path.write_text('Interpretive briefing')
+            with self.assertRaisesRegex(ValueError,'reserved'):
+                c.record_output(db,'org/repo',run,path,'pending')
+            db.execute('INSERT INTO run_outputs VALUES(?,?,?)',(run,str(path),'pending'))
+            db.commit()
+            c.write_ledger(db,run,path)
+            self.assertEqual(path.read_text(),'Interpretive briefing')
+            db.close()

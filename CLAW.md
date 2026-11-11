@@ -8,6 +8,10 @@ workspace:
   files:
     - source: skills/project-briefing/SKILL.md
       path: skills/project-briefing/SKILL.md
+    - source: skills/project-briefing/DATA.md
+      path: skills/project-briefing/DATA.md
+    - source: skills/project-briefing/scripts/refresh.py
+      path: skills/project-briefing/scripts/refresh.py
     - source: skills/project-briefing/scripts/collect.py
       path: skills/project-briefing/scripts/collect.py
 packages: []

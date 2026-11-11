@@ -1,23 +1,40 @@
 # Verification
 
-## Current local checks
+## Current revision
 
-- 14 collector tests pass, covering bounded discovery, dormant PR exclusion, explicit reconciliation, pagination limits, checkpoint rollback, deduplication, release edits/drafts, and pending-output recovery.
-- New discovery/reconciliation regressions fail against the saved pre-change collector. The evidence-limit test checks bounded runtime behaviour without a new test-only API.
-- Template validation and dev preview pass; preview reports zero blocked actions. Preview is not installation.
-- git diff --check passes.
-- Rebuilt archive: dist/project-briefing-0.1.0-simplified.tgz.
+23 tests pass, including the real refresh/collector CLI against fake gh, baseline
+and delta, no configuration, malformed configuration, path/budget validation,
+independent repository failures, blocker deduplication/recovery, concurrent
+refresh exclusion, lightweight collection, checkpoint rollback and reporting
+recovery. No network or credentials are needed for these tests.
 
-## What changed
+Template validation and dev preview pass (zero blocked actions). The archive
+is dist/project-briefing-0.1.0-lifecycle.tgz. A preview is not installation.
 
-Discovery now reads PRs in updated order and stops at the time boundary or the 100-PR budget. It no longer inventories all open PRs. Each other paginated evidence stream is limited to 1,000 records. Overflow fails the scan; no partial checkpoint or silently selected subset is recorded. Reconciliation explicitly revisits previously tracked open PRs.
+## Source review
 
-Bootstrap introduces the agent. The skill owns one ordered workflow. The manifest owns the role and schedule. Combined instruction length fell from 1,746 to 1,015 words.
+Independent Codex review used the complete current source, instructions, docs
+and tests, not recollection. It found two P2 defects:
+- Registered briefings could be overwritten by ledger regeneration.
+- Changing API window parameters defeated blocker suppression.
 
-## Limits of this evidence
+Both are fixed with regression tests. Ledger filenames are reserved for new
+outputs; legacy registered briefings are preserved. Error signatures strip
+changing query parameters. No second clean-review verdict is claimed.
 
-Earlier live raw-labs/snapi baseline/delta checks passed before this discovery change. The revised collector has not been live-retested; current discovery evidence uses deterministic GitHub fixtures.
+## Boundaries
 
-Still unverified: fresh-agent onboarding, execution-host access, scheduled/no-setup runs, malformed configuration handling, blocker deduplication, setup/job races, delivery receipts and routing, and deletion cleanup. Those behaviours are partly instructions, not deterministic collector guarantees. Briefing usefulness also needs an installed-agent trial.
+This revision changes portable source only. It does not upgrade the existing
+installed agent, alter its job or remove historical patches from its database.
+Earlier installed-agent use exposed the onboarding, collection and reporting
+problems addressed here.
 
-No agent or automation was installed during this revision. No dashboard or publication.
+Still unverified: real scheduler routing/receipts, installation recovery on the
+affected Gateway, interactive setup racing a scheduled refresh, and deletion
+cleanup. Template instructions now separate collection readiness from delivery
+readiness. No claim of fully tested unattended operation.
+
+The skill now requires source checks, attribution and omission checks for
+briefings. Briefing usefulness and RFC-to-implementation interpretation still
+need evaluation against a real project's sources; deterministic collection tests
+do not establish semantic quality.

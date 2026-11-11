@@ -71,7 +71,7 @@ def save(db, run, repo, records):
         changed += 1
     return changed
 
-def collect(db, repo, since, until, reconcile=False, fetch=api):
+def collect(db, repo, since, until, reconcile=False, fetch=api, max_prs=100):
     base = f"repos/{repo}"
     metadata = fetch(base)
     # Complete open inventory plus updated closed/merged inventory; no Search API cap.
@@ -100,6 +100,9 @@ def collect(db, repo, since, until, reconcile=False, fetch=api):
                   "reviews": pages(f"{base}/pulls/{key}/reviews", fetch=fetch),
                   "review_comments": pages(f"{base}/pulls/{key}/comments", fetch=fetch)}
         return "pr", key, result
+
+    if len(prs) > max_prs:
+        raise RuntimeError(f"Preflight: {len(opened)} open PRs, {len(recent)} recently updated closed PRs; {len(prs)} unique PRs require coverage, above --max-prs {max_prs}. No PR conversations fetched. Narrow the project scope or explicitly raise --max-prs. No checkpoint advanced.")
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         records = list(pool.map(detail, prs.items()))
@@ -181,9 +184,10 @@ def main():
     parser.add_argument("--state-dir", type=Path, required=True)
     parser.add_argument("--days", type=int, default=7)
     parser.add_argument("--reconcile", action="store_true")
+    parser.add_argument("--max-prs", type=int, default=100, help="Stop before fetching conversations if the discovered PR inventory exceeds this count")
     args = parser.parse_args()
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo) or args.days < 1:
-        parser.error("Use owner/repository and a positive --days")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo) or args.days < 1 or args.max_prs < 1:
+        parser.error("Use owner/repository and positive --days / --max-prs")
     args.state_dir.mkdir(parents=True, exist_ok=True)
     # One writer per state directory, including collection (prevents competing checkpoints).
     import fcntl
@@ -191,11 +195,16 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         db = connect(args.state_dir / "activity.sqlite")
         try:
-            run, count = refresh(db, args.repo, args.days, args.reconcile)
+            run, count = refresh(db, args.repo, args.days, args.reconcile,
+                                 collector=lambda db, repo, since, until, reconcile: collect(
+                                     db, repo, since, until, reconcile, max_prs=args.max_prs))
         except Exception:
             run = db.execute("SELECT max(id) FROM runs").fetchone()[0]
-            (args.state_dir / f"run-{run}.md").write_text(render(db,run))
-            raise
+            report = args.state_dir / f"run-{run}.md"
+            report.write_text(render(db,run))
+            error = db.execute("SELECT error FROM runs WHERE id=?", (run,)).fetchone()[0]
+            print(json.dumps({"run":run,"status":"failed","error":error,"report":str(report)}))
+            raise SystemExit(1)
         report = args.state_dir / f"run-{run}.md"
         report.write_text(render(db,run))
         print(json.dumps({"run":run,"changed_records":count,"report":str(report),"status":"complete"}))

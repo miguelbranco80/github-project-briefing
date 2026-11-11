@@ -75,6 +75,18 @@ class CollectorTests(unittest.TestCase):
         self.assertIn("Merged PRs",report)
         self.assertIn("acceptance and implementation unverified",report)
         self.assertIn("not verified maintainer",report)
+    def test_oversized_inventory_stops_before_conversation_reads(self):
+        requested=[]
+        def fetch(url):
+            requested.append(url)
+            if url=="repos/org/repo": return {"default_branch":"main"}
+            if "/pulls?state=open" in url:
+                return [{"number":n,"updated_at":"2026-11-11T00:00:00Z"} for n in range(3)]
+            return []
+        with self.assertRaisesRegex(RuntimeError,"3 open PRs.*above --max-prs 2"):
+            c.collect(self.db,"org/repo","2026-11-10T00:00:00Z","2026-11-11T00:00:00Z",fetch=fetch,max_prs=2)
+        self.assertFalse(any("/comments" in url or "/files" in url or "/reviews" in url for url in requested))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM objects").fetchone()[0],0)
     def test_open_inventory_and_closed_reconciliation(self):
         old = {"pr":{"state":"open","updated_at":"old","head":{"sha":"a"}}}
         c.refresh(self.db,"org/repo",collector=lambda *a:[("pr","1",old)])

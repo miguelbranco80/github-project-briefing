@@ -23,6 +23,7 @@ Only the two explicitly selected skill files and manifest/package metadata enter
 
 ## Current boundaries
 
+- Preflight counts open and recently updated closed PRs; stops before conversation fetching above 100 unique PRs by default. An explicit --max-prs N raises this ceiling; no automatic escalation or silent truncation. Metadata discovery itself is still paginated. Lowering --days does not exclude old open PRs.
 - Complete current open-PR inventory; seven-day initial updated-closed-PR window; default-branch commits and releases in the window.
 - Paginated PR issue comments, reviews, inline comments and paths; GitHub's 3,000-file PR cap is a hard coverage failure.
 - Atomic SQLite record/checkpoint commits, 24-hour overlap, per-state writer lock, read-only GitHub API calls and bounded transient HTTP retries.

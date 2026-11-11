@@ -49,6 +49,23 @@ class CollectorTests(unittest.TestCase):
             c.refresh(self.db,"org/repo",collector=broken)
         self.assertEqual(self.db.execute("SELECT count(*) FROM objects").fetchone()[0],0)
         self.assertEqual(self.db.execute("SELECT status FROM runs").fetchone()[0],"failed")
+    def test_edits_retain_before_and_after_evidence(self):
+        c.refresh(self.db,"org/repo",collector=lambda *a:[("pr","1",{"body":"proposed"})])
+        c.refresh(self.db,"org/repo",collector=lambda *a:[("pr","1",{"body":"revised"})])
+        row=self.db.execute("SELECT before_json,after_json FROM changes WHERE run_id=2").fetchone()
+        self.assertEqual(c.json.loads(row[0])["body"],"proposed")
+        self.assertEqual(c.json.loads(row[1])["body"],"revised")
+    def test_repository_checkpoints_are_independent(self):
+        c.refresh(self.db,"org/one",collector=lambda *a:[("commit","a",{})])
+        seen=[]
+        def collect_two(db,repo,since,until,reconcile):
+            seen.append(since)
+            return [("commit","a",{})]
+        _,count=c.refresh(self.db,"org/two",days=30,collector=collect_two)
+        self.assertEqual(count,1)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM objects").fetchone()[0],2)
+        age=c.dt.datetime.now(c.dt.timezone.utc)-c.dt.datetime.fromisoformat(seen[0].replace("Z","+00:00"))
+        self.assertGreater(age.days,28)
     def test_closed_proposal_not_claimed_implemented(self):
         record = {"pr":{"title":"Proposal","html_url":"https://github.com/org/repo/pull/1",
             "state":"closed","merged_at":"2026-11-11T00:00:00Z","user":{"login":"author"}},

@@ -1,0 +1,36 @@
+"""Verify a built archive in isolation, including a cold locked npm installation."""
+import argparse
+import os
+from pathlib import Path
+import re
+import subprocess
+import tarfile
+import tempfile
+
+SOURCE = Path(__file__).resolve().parents[1]
+
+
+def check(artifact):
+    with tempfile.TemporaryDirectory(prefix="briefing-archive-") as temporary:
+        temporary = Path(temporary)
+        with tarfile.open(artifact) as archive:
+            archive.extractall(temporary, filter="data")
+            files = {m.name for m in archive.getmembers() if m.isfile()}
+        package = temporary / "package"
+        selected = re.findall(r"^    - source: (.+)$", (package / "CLAW.md").read_text(), re.MULTILINE)
+        expected = {"package/" + name for name in selected}
+        expected.update({"package/CLAW.md", "package/BOOTSTRAP.md", "package/package.json"})
+        if files != expected:
+            raise ValueError(f"Archive selection mismatch: {files ^ expected}")
+        subprocess.run(["npm", "ci", "--prefix", str(package / "skills/project-briefing/journal"),
+                        "--ignore-scripts", "--no-audit", "--no-fund"], check=True, timeout=180)
+        env = dict(os.environ, PROJECT_BRIEFING_TEST_PACKAGE=str(package))
+        subprocess.run(["python3", "-m", "unittest", "discover", "-s", str(SOURCE / "tests"),
+                        "-p", "test_journal.py", "-v"], env=env, check=True, timeout=180)
+        print(f"Verified {len(files)} archive files and the journal workflow from extracted package code.")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("artifact", type=Path)
+    check(parser.parse_args().artifact)

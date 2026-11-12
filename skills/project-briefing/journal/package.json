@@ -1,0 +1,14 @@
+{
+  "name": "project-fieldnotes",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Static engineering journal for a monitored GitHub project",
+  "scripts": {
+    "build": "python3 build.py",
+    "serve": "python3 -m http.server 8080 --bind 127.0.0.1 --directory _site"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "3.1.8",
+    "markdown-it-anchor": "9.2.0"
+  }
+}

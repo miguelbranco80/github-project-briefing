@@ -1,49 +1,59 @@
-# Project Briefing — local prototype
+# Project Briefing
 
-See [INSTALL.md](INSTALL.md) for the exact local installation, first-run checks, and removal procedure.
+An agent template that follows GitHub repositories and maintains an illustrated
+engineering blog: source-linked articles, generated covers, a consistent layout
+and a dated archive. One daily job handles collection, interpretation and journal
+updates. New installations contain no repository configuration or research data.
 
-Portable source; real monitoring state belongs outside this directory. Python 3 stdlib and an already authenticated GitHub CLI are required. The collector supports POSIX file locking.
+## Develop and check
 
-## Try without installing an agent
+Requires Python 3.10+ on POSIX, Node.js/npm, and the OpenClaw CLI. Live collection
+uses existing authenticated gh; live covers require an image-generation tool.
 
-```sh
-python3 skills/project-briefing/scripts/collect.py --repo OWNER/REPOSITORY --state-dir /absolute/private/state
+~~~sh
+npm ci --prefix skills/project-briefing/journal --ignore-scripts --no-audit --no-fund
 python3 -m unittest discover -s tests -v
-```
-
-Read the generated run-N.md and follow the skill to produce an interpretive briefing from SQLite evidence. Refresh with the same command. Use --reconcile to bypass the PR-detail cache. Multiple projects use separate state directories.
-
-## Package
-
-```sh
 openclaw templates validate .
 openclaw templates dev .
-openclaw templates build . --out /tmp/project-briefing-0.1.0.tgz
-```
+openclaw templates build . --out dist/project-briefing-0.2.0.tgz
+python3 tests/check_archive.py dist/project-briefing-0.2.0.tgz
+~~~
 
-The selected skill files, BOOTSTRAP.md, and manifest/package metadata enter the archive. No GitHub evidence, credentials, or personal settings belong in a published package. The local package scope is provisional, not a registry identity.
+The tests use disposable workspaces and fake GitHub responses. They exercise
+collection, recovery, journal preparation/building, archive preservation, failed
+builds, idempotent publication and package resource coverage. No live research
+or credentials enter the package.
 
-## Current boundaries
+## Ownership
 
-- Seven-day initial window of updated PRs and default-branch commits; subsequent scans overlap the last successful start by 24 hours. Dormant open PRs are excluded until updated.
-- PR discovery stops above 100 recent PRs before conversation fetching. --days narrows only the initial window; --max-prs explicitly changes the PR ceiling. No silent truncation or automatic escalation.
-- Each paginated evidence stream is capped at 1,000 records, including releases, commits, PR comments, reviews, and paths. Overflow fails the scan without advancing a checkpoint. This is a bounded briefing collector, not a complete archive.
-- Current releases are compared each run, including edits to old releases and unpublished drafts.
-- Atomic SQLite record/checkpoint commits, 24-hour overlap, per-state writer lock, read-only GitHub API calls and bounded transient HTTP retries.
-- No automatic interpretation of acceptance, authority, implementation relationships or deployment.
-- No ordinary-issue/GitHub-Discussion collection, CI collection, RFC document snapshots, role roster discovery, full historical reconciliation or automatic notification receipt verification. Per-run output records separate unbriefed work from pending/uncertain delivery; saved briefings are never automatically regenerated or resent.
-- Incremental PR caching relies on GitHub updated_at and head SHA. Reconcile re-fetches recent and previously tracked open records within the same budget; old closed discussions and deleted releases are not fully reconciled.
-- Live collection is not a transactional snapshot; report its timestamps and limitations.
-- An earlier version was trial-installed; this source revision has not been applied to that agent. No dashboard is included.
+- CLAW.md declares installed files and the single daily job.
+- BOOTSTRAP.md starts onboarding; skills/project-briefing/SKILL.md owns the workflow.
+- scripts/collect.py owns bounded collection and reporting records; refresh.py
+  owns configuration checks, independent refreshes and blocker deduplication.
+- scripts/journal.py binds articles to completed runs, initializes each project's
+  blog, builds it and records outputs. The journal directory supplies the portable
+  site engine, post template, editorial rules and illustration brief.
+- [DATA.md](skills/project-briefing/DATA.md) owns the evidence schema and scope.
+- [INSTALL.md](INSTALL.md) owns installation/removal; [VERIFICATION.md](VERIFICATION.md)
+  records what has actually been tested.
 
-## First-run and daily workflow
+All runtime resources are inside this template. No separate workshop skill,
+OCE-specific tracker or development-workspace path is required. Article Markdown
+is also the saved briefing: there is no duplicate narrative file to maintain.
+Generated outputs live under each project's data directory, not in template source.
 
-Template Add creates a dedicated agent and workspace, opens its chat, and sends the initial message. BOOTSTRAP.md delegates to the skill: introduce the service, then ask for a repository. Priorities and watchlists are optional; cadence defaults to daily at 09:00 UTC. Configuration is saved in workspace projects.json, so isolated daily runs do not depend on chat history. The manifest declares one daily job with last-channel delivery. Verify the installed job state and delivery before claiming monitoring is active.
+## Boundaries
 
-No repository is configured in the package. Before onboarding, scheduled runs stay quiet. Installation/onboarding, last-channel delivery, and scheduler execution still need end-to-end testing.
+The agent writes and generates art during the scheduled turn; the builder alone
+does neither. Code validates the mechanics, not the truth or usefulness of prose.
+Quiet polls do not create filler posts. Diagrams are optional and must be grounded
+in inspected code or design sources. Portals serve previews; public hosting is
+not configured.
 
-## Data and daily execution
+Collection covers recent PR metadata/discussions, commits and releases within
+explicit budgets. It is not a full source archive, CI monitor, issue tracker or
+deployment qualification. See DATA.md for details.
 
-[DATA.md](skills/project-briefing/DATA.md) documents collection and storage. No patch or source-file endpoint is fetched by default. Old stored evidence is preserved, not silently erased.
-
-The daily skill invokes scripts/refresh.py with --workspace WORKSPACE. This validates configuration before collection, skips absent/empty setup, suppresses unchanged blockers and reports recovery. It does not configure the scheduler or prove notification delivery.
+Portable-source updates do not automatically upgrade an already installed agent
+or rewrite its existing data. Source/package tests are not proof of successful
+installation, scheduler execution, image generation or requester-side rendering.

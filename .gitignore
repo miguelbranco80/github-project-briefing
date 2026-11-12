@@ -3,3 +3,6 @@ __pycache__/
 *.sqlite*
 *.tgz
 data/
+node_modules/
+_site/
+.build-*/

@@ -1,5 +1,33 @@
 # Verification
 
+## Version 0.2.3: engineering-blog editorial contract
+
+STYLE.md now asks for technical stories readable by engineers outside the
+project: problem and context, concrete mechanism, design trade-offs and practical
+consequences. It includes a clearly fictional before/after writing example.
+Connected prose and source-led headings replace PR-by-PR summaries and a fixed
+update-report outline. Collection counts belong in the compact coverage footer
+or delivery message, not the lead. The skill requires rereading the actual draft
+against this guide; the starter no longer mandates multiple stories, smaller
+updates or a speculative closing section.
+
+38 tests pass in the source checkout and against the extracted 24-file 0.2.3
+archive with a cold locked dependency install. Template validation and install
+preview pass with zero blocked actions. The new regression fills starter
+metadata but leaves the draft marker: publication rejects it before building,
+retains the good site and leaves the run unbriefed. Replacing the starter with
+article content allows the same run to publish. This is a mechanical scaffold
+guard, not an automated judgment of prose quality or technical truth.
+
+The idle installed test agent received eight backed-up file updates: the skill,
+journal script, and the editorial guide/starter/README in both the installed
+resources and its initialized journal. Thirty-three project files, including
+configuration, evidence, existing articles and generated output, were hash-checked
+unchanged. No scan, article rewrite or notification was run. Existing posts are
+not evidence of the new writing instructions being exercised by a live model;
+review the next actual draft for editorial quality. The prior scheduled portal
+and delivery blockers remain unresolved by this update.
+
 ## Version 0.2.2: counted first-scan scope choices
 
 The collector now checks GitHub Search PR counts before the first successful

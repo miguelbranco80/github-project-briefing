@@ -101,10 +101,14 @@ For a meaningful update:
 python3 scripts/journal.py prepare --workspace WORKSPACE --repo OWNER/REPO --run RUN
 ```
 
-Read [journal/STYLE.md](journal/STYLE.md) for editorial and optional diagram rules.
+Read [journal/STYLE.md](journal/STYLE.md) before drafting; it owns the engineering-blog
+voice, source standards and optional diagram rules. Write a technical story with
+context, mechanism, trade-offs and practical consequences, not a scan report or
+PR-by-PR digest. Reread the actual draft against that guide before publication.
 Edit the returned article: keep its JSON frontmatter format and collector-derived
 run/source/date/window; fill the editorial fields and write the narrative in
-Markdown. This is the single briefing source, not a second copy of briefing-N.md.
+Markdown, replacing the starter and removing its draft marker. This is the single
+briefing source, not a second copy of briefing-N.md.
 Link continuing stories to earlier entries; state coverage, gaps and uncertainty.
 
 Articles need no cover or image-generation call. Only consult

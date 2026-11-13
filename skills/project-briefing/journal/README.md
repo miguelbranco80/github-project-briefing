@@ -10,6 +10,9 @@ a separate site under each configured STATE/journal/. It fills repository
 branding and derives the post date and observation window from the completed
 collector run. Draft paths are stable per run and live outside src/. Preparing again does not
 overwrite the draft, archive or art; unfinished drafts cannot block other posts.
+The starter is writing guidance, not publishable prose. Publication rejects its
+explicit draft marker even after metadata is filled; replace the scaffold and
+remove the marker after editorial review. This check cannot judge writing quality.
 
 The publish command builds and validates that site, then records the article
 as the run's briefing in the existing SQLite reporting table. A retry returns

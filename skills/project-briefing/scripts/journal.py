@@ -89,6 +89,8 @@ def journal(workspace, repo, run, action):
                 return result
             if not article.is_file():
                 raise ValueError("Prepare the article before publishing")
+            if "<!-- project-briefing: draft -->" in article.read_text():
+                raise ValueError("Replace the article scaffold and remove its draft marker before publishing")
             try:
                 actual = json.loads(article.read_text().removeprefix("---\n").split("\n---\n", 1)[0])
             except (ValueError, IndexError) as error:

@@ -124,6 +124,25 @@ class JournalTests(unittest.TestCase):
         self.assertEqual(retry["post_url"], built["post_url"])
         self.assertEqual(snapshot(site), before)
 
+    def test_starter_cannot_publish_with_only_metadata_filled(self):
+        self.author()
+        first = self.command("publish")
+        previous = snapshot(Path(first["output_dir"]))
+        draft = self.draft(2)
+        article = Path(draft["article"])
+        metadata, body = article.read_text().removeprefix("---\n").split("\n---\n", 1)
+        metadata = json.loads(metadata)
+        metadata.update(title="A finished headline", description="A finished description.")
+        article.write_text("---\n" + json.dumps(metadata) + "\n---\n" + body)
+        failed = self.command("publish", 2, succeeds=False)
+        self.assertIn("Replace the article scaffold", failed.stderr)
+        self.assertEqual(snapshot(Path(first["output_dir"])), previous)
+        self.assertTrue(article.is_file())
+        with sqlite3.connect(self.state / "activity.sqlite") as db:
+            self.assertIsNone(db.execute("SELECT 1 FROM run_outputs WHERE run_id=2").fetchone())
+        self.author(2)
+        self.assertEqual(self.command("publish", 2)["status"], "built")
+
     def test_invalid_entry_retains_good_site_and_reporting_backlog(self):
         self.author()
         first = self.command("publish")

@@ -15,8 +15,8 @@ npm ci --prefix skills/project-briefing/journal --ignore-scripts --no-audit --no
 python3 -m unittest discover -s tests -v
 openclaw templates validate .
 openclaw templates dev .
-openclaw templates build . --out dist/project-briefing-0.2.2.tgz
-python3 tests/check_archive.py dist/project-briefing-0.2.2.tgz
+openclaw templates build . --out dist/project-briefing-0.2.3.tgz
+python3 tests/check_archive.py dist/project-briefing-0.2.3.tgz
 ~~~
 
 The tests use disposable workspaces and fake GitHub responses. They exercise
@@ -48,7 +48,9 @@ Generated outputs live under each project's data directory, not in template sour
 The requesting agent owns research, writing, publication and presentation;
 optional helpers return bounded evidence reviews. The builder does not write
 articles or generate art. Code validates the mechanics, not the truth or
-usefulness of prose.
+usefulness of prose. The editorial guide calls for engineering stories explaining
+problems, mechanisms, trade-offs and consequences, not PR inventories. The starter
+is deliberately unpublished until its draft marker is removed after writing.
 Quiet polls do not create filler posts. Diagrams are optional and must be grounded
 in inspected code or design sources. Portals serve previews; public hosting is
 not configured.

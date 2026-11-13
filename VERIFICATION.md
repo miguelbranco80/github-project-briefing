@@ -44,10 +44,21 @@ Configuration, evidence, articles and assets were left unchanged; replaced
 files were backed up. Its existing daily job's prompt now points at the single
 updated skill. The job ID, schedule and destination were preserved.
 
-A manual run of that existing job was requested. The request timed out; a
-subsequent get showed runningAtMs, but run-history access returned a visibility
-limit. No retry or replacement job was created. Live scheduled completion and
-requester-side presentation are not verified by the source/package checks.
+A manual run of that existing job completed in 59 seconds. It collected four PR
+changes and one commit, wrote a new text-only article and built five pages with
+76 local link/asset checks. Its final blocker report is visible in the parent
+session history. The existing artwork remained optional rather than blocking it.
+
+End-to-end presentation and notification failed with concrete runtime blockers:
+- The scheduled turn's portal call was denied because it lacked owner authority,
+  despite the interactive agent having portal access.
+- Delivery recorded lastDelivered=false, lastDeliveryStatus=not-delivered and
+  "Channel is required when delivery.channel=last has no previous channel."
+
+The run request itself timed out and the runs endpoint returned a visibility
+limit; get and parent history supplied the results above. No run was retried,
+no job was replaced and no broader tool permissions were granted. These runtime
+blockers are not fixed by the prompt/build changes.
 
 ## Boundaries
 

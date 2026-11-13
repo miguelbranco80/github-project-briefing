@@ -30,10 +30,12 @@ refresh.py validates this configuration. Preserve malformed files and explain
 errors rather than guessing replacements. Keep evidence and journals under each
 project's state directory. Do not create a separate workflow file.
 
-Check Python 3.10+, Node.js/npm and portal access on the requesting agent.
+Check Python 3.10+, Node.js/npm and portal access on the requesting agent;
+verify scheduled authority separately from interactive tool availability.
 screen is needed only for panel presentation; image generation is not a
 prerequisite. Check the assigned automation's enabled state, schedule and
-destination. Daily updates are included; do not offer a second job. Reconcile
+destination. A last-channel fallback without a previous channel is not a
+configured notification destination. Daily updates are included; do not offer a second job. Reconcile
 partial installation instead of duplicating it. State collection, presentation
 and notification readiness separately; an enabled schedule is not delivery proof.
 

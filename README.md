@@ -2,13 +2,40 @@
 
 An agent template that follows GitHub repositories and maintains an engineering
 blog: source-linked articles, a consistent layout and a dated archive. One daily
-job handles collection, interpretation and journal updates. New installations contain no repository configuration or research data.
+job handles collection, interpretation and journal updates. New installations
+contain no repository configuration or research data.
+
+## Install
+
+Requires Python 3.10+ on POSIX, Node.js/npm, authenticated `gh`, and a working
+OpenClaw template Add flow. The agent needs portal access to present the blog;
+`screen` is optional for panel display. Image generation is not required.
+
+~~~sh
+gh repo clone miguelbranco80/project-briefing-template
+cd project-briefing-template
+openclaw templates add .
+~~~
+
+Add creates an independent agent and one daily job at 09:00 UTC; adding again is
+not an upgrade. Open the new agent's chat and send **Get started** if onboarding
+does not start automatically. The agent asks which repository to follow and
+checks tools, collection scope and daily delivery.
+
+For a first-run check, ask: **Refresh now, build the journal without decorative
+artwork, show the article and report collection, presentation and daily-delivery
+readiness.** A second refresh should preserve the archive and only publish when
+there are meaningful new developments. Verify the daily job's actual destination
+and delivery, not just its existence.
+
+To remove the agent, export any wanted data, then delete it through the UI or run
+`openclaw agents delete ACTUAL_AGENT_ID`. This removes its workspace and assigned
+automations. Deleting a chat does not uninstall the agent. Source checkouts,
+archives, shared credentials and already-delivered reports remain.
 
 ## Develop and check
 
-Requires Python 3.10+ on POSIX, Node.js/npm, and the OpenClaw CLI. Live collection
-uses existing authenticated gh; preview requires portal access on the requesting
-agent.
+Run from the source checkout with the OpenClaw CLI available:
 
 ~~~sh
 npm ci --prefix skills/project-briefing/journal --ignore-scripts --no-audit --no-fund
@@ -24,6 +51,26 @@ collection, recovery, journal preparation/building, archive preservation, failed
 builds, idempotent publication and package resource coverage. No live research
 or credentials enter the package.
 
+## Verification and known limits
+
+Version 0.2.3 passed 38 tests in the source checkout and against the extracted
+release archive, including a cold locked dependency install. Template validation
+and install preview passed. These checks cover collection limits and recovery,
+text-only publication, optional assets, draft rejection, archive preservation,
+local links and package resources; they do not certify editorial quality.
+
+A live scheduled run collected evidence and built a text-only article, but
+presentation and notification failed: the scheduled turn lacked portal authority
+and its `channel: last` delivery had no destination. Those runtime blockers remain
+unresolved. Fresh-agent installation, notification routing, setup/scheduler races,
+portal recovery after restart and requester-side desktop/mobile rendering still
+need end-to-end verification.
+
+The tested 2026.11.5-beta.1 CLI also had an Add defect: it required a stopped
+Gateway, then contacted that Gateway to create the job. This template does not
+fix that runtime issue. If Add partially succeeds, inspect the agent and job
+before retrying; do not stop the Gateway just to repeat the same failing command.
+
 ## Ownership
 
 - CLAW.md declares installed files and the single daily job.
@@ -35,8 +82,6 @@ or credentials enter the package.
   blog, builds it and records outputs. The journal directory supplies the portable
   site engine, post template, editorial rules and optional one-off artwork guide.
 - [DATA.md](skills/project-briefing/DATA.md) owns the evidence schema and scope.
-- [INSTALL.md](INSTALL.md) owns installation/removal; [VERIFICATION.md](VERIFICATION.md)
-  records what has actually been tested.
 
 All runtime resources are inside this template. No separate workshop skill,
 OCE-specific tracker or development-workspace path is required. Article Markdown
@@ -57,7 +102,7 @@ not configured.
 
 Collection covers recent PR metadata/discussions, commits and releases within
 explicit budgets. It is not a full source archive, CI monitor, issue tracker or
-deployment qualification. See DATA.md for details.
+deployment qualification. See [DATA.md](skills/project-briefing/DATA.md) for details.
 
 Portable-source updates do not automatically upgrade an already installed agent
 or rewrite its existing data. Source/package tests are not proof of successful

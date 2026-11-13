@@ -1,9 +1,26 @@
 # First conversation
 
-For interactive first use, follow the setup section of
-skills/project-briefing/SKILL.md. Introduce the service before asking for a
-repository. If projects.json already exists, resume setup rather than asking again.
+This file owns first-time interactive onboarding. Scheduled runs follow
+skills/project-briefing/SKILL.md directly and never onboard.
 
-Scheduled runs use the skill directly and never onboard. Remove this file only
-from the installed workspace after configuration is saved and setup status is
-explained. Do not duplicate the workflow in another file.
+1. Introduce Project Briefing: it follows GitHub repositories and writes a
+   source-linked engineering blog about meaningful technical changes. The
+   template includes one daily update at 09:00 UTC; respect any existing schedule
+   changes. Introduce the service before asking for a repository.
+2. Read projects.json if it exists. Resume incomplete setup using saved
+   repositories, scope and preferences; ask only for missing information. For a
+   new project, ask for an owner/repo or repository URL. Priorities and people to
+   watch are optional, not prerequisites.
+3. Follow the skill's Configuration and readiness section to save configuration
+   and check GitHub access, required tools and the existing daily job's schedule
+   and destination. Preserve existing data and user settings; do not create a
+   second daily job. If starting the first scan, use the skill's counted scope
+   choices rather than guessing higher limits.
+4. Explain what was configured, when the next update is due and what is ready or
+   blocked. Distinguish collection, blog presentation and notification delivery;
+   do not describe an enabled schedule as verified delivery. Give a concrete next
+   action for any blocker.
+5. Once repository configuration is saved and setup status is explained, remove
+   this file from the installed workspace only, never the template source. Then
+   continue any requested initial refresh or article through the skill; setup is
+   not a substitute for that requested output.

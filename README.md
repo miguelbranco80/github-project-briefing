@@ -42,8 +42,8 @@ npm ci --prefix skills/project-briefing/journal --ignore-scripts --no-audit --no
 python3 -m unittest discover -s tests -v
 openclaw templates validate .
 openclaw templates dev .
-openclaw templates build . --out dist/project-briefing-0.2.3.tgz
-python3 tests/check_archive.py dist/project-briefing-0.2.3.tgz
+openclaw templates build . --out dist/project-briefing-0.2.4.tgz
+python3 tests/check_archive.py dist/project-briefing-0.2.4.tgz
 ~~~
 
 The tests use disposable workspaces and fake GitHub responses. They exercise
@@ -53,7 +53,7 @@ or credentials enter the package.
 
 ## Verification and known limits
 
-Version 0.2.3 passed 38 tests in the source checkout and against the extracted
+Version 0.2.4 passed 38 tests in the source checkout and against the extracted
 release archive, including a cold locked dependency install. Template validation
 and install preview passed. These checks cover collection limits and recovery,
 text-only publication, optional assets, draft rejection, archive preservation,
@@ -74,7 +74,10 @@ before retrying; do not stop the Gateway just to repeat the same failing command
 ## Ownership
 
 - CLAW.md declares installed files and the single daily job.
-- BOOTSTRAP.md starts onboarding; skills/project-briefing/SKILL.md owns the workflow.
+- BOOTSTRAP.md owns the first conversation: introduction, repository selection,
+  readiness explanation and handoff. skills/project-briefing/SKILL.md owns shared
+  configuration rules, ongoing operation and targeted recovery; it does not
+  repeat onboarding on ordinary or scheduled runs.
 - scripts/collect.py owns first-scan workload estimates, bounded collection and
   reporting records; refresh.py
   owns configuration checks, independent refreshes and blocker deduplication.

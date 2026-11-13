@@ -1,6 +1,6 @@
 {
   "name": "@local/project-briefing-template",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "type": "module",
   "openclaw": { "template": "CLAW.md" }
 }

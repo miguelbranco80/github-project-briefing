@@ -13,14 +13,17 @@ delivery. Optional helpers may review bounded evidence and return findings only;
 do not delegate image generation, building or presentation. Await required
 findings before continuing, not an unfinished end-to-end job's first reply.
 
-## 1. Configure
+## 1. Configuration and readiness
 
-On first interactive use, introduce the service: follow repositories and maintain
-an engineering blog, updated daily at 09:00 UTC. Ask for an owner/repo or
-repository URL; priorities and people to watch are optional. Scheduled runs
-never onboard.
+BOOTSTRAP.md owns first-time interactive onboarding when present. This skill
+owns reusable configuration rules, ongoing operation and targeted recovery.
+For later interactive configuration changes or repairs, ask only for missing
+information or the requested change; do not repeat the welcome or repository
+questions already answered. Scheduled runs never onboard or ask setup questions.
 
-Verify existing gh access. Save workspace projects.json atomically, merging:
+Read existing projects.json before changing it. Verify existing gh access and
+save workspace projects.json atomically, merging supplied changes and preserving
+other projects and user settings. For a new project, use:
 
 ```json
 {"projects":[{"repo":"owner/repo","state_dir":"data/owner--repo","priorities":[],"watchlist":[],"days":7,"max_prs":100}]}
@@ -30,14 +33,16 @@ refresh.py validates this configuration. Preserve malformed files and explain
 errors rather than guessing replacements. Keep evidence and journals under each
 project's state directory. Do not create a separate workflow file.
 
-Check Python 3.10+, Node.js/npm and portal access on the requesting agent;
-verify scheduled authority separately from interactive tool availability.
+During configuration or a relevant repair, check Python 3.10+, Node.js/npm and
+portal access on the requesting agent; verify scheduled authority separately
+from interactive tool availability.
 screen is needed only for panel presentation; image generation is not a
 prerequisite. Check the assigned automation's enabled state, schedule and
 destination. A last-channel fallback without a previous channel is not a
-configured notification destination. Daily updates are included; do not offer a second job. Reconcile
-partial installation instead of duplicating it. State collection, presentation
-and notification readiness separately; an enabled schedule is not delivery proof.
+configured notification destination. Reuse the assigned daily job and preserve
+its schedule and destination unless the user requests a change. Reconcile partial
+installation instead of duplicating it. State collection, presentation and
+notification readiness separately; an enabled schedule is not delivery proof.
 
 The commands below run from this skill's directory. WORKSPACE is the installed
 agent workspace, STATE the configured project state directory, and RUN a

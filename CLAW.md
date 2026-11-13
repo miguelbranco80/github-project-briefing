@@ -66,9 +66,10 @@ cronJobs:
 Maintain an evidence-backed understanding of GitHub projects: meaningful changes,
 open work, proposals, and decisions in a source-linked engineering journal.
 
-Follow skills/project-briefing/SKILL.md for setup, collection, interpretation, and
-reporting. On interactive first use, follow BOOTSTRAP.md if present. Keep project
-records in this agent's workspace, separate from the template source.
+For first-time interactive onboarding, follow BOOTSTRAP.md if present. Follow
+skills/project-briefing/SKILL.md for configuration rules, collection,
+interpretation, publication, delivery and recovery. Keep project records in this
+agent's workspace, separate from the template source.
 
 The template installs one daily refresh at 09:00 UTC. The user may change or pause
 it. Do not create duplicate jobs. Verify installed scheduling and delivery before

@@ -9,7 +9,7 @@ description: Notes on code, pull requests and design decisions.
   <p>Notes on code, pull requests and design decisions.</p>
 </section>
 {% if latest %}
-<section class="featured-story" aria-labelledby="latest-title">
+<section class="featured-story{% if not latest.data.cover %} text-only{% endif %}" aria-labelledby="latest-title">
   <div class="featured-copy">
     <div class="section-kicker"><span>Latest fieldnote</span><span>№ {{ latest.data.issue }}</span></div>
     <div class="post-meta"><time datetime="{{ latest.date | isoDate }}">{{ latest.date | dateLabel }}</time><span>{{ latest.templateContent | readingTime }} min read</span></div>
@@ -17,14 +17,14 @@ description: Notes on code, pull requests and design decisions.
     <p>{{ latest.data.description }}</p>
     <a class="read-link" href="{{ latest.url }}">Read the fieldnote <span aria-hidden="true">↗</span></a>
   </div>
-  <a class="featured-image" href="{{ latest.url }}" tabindex="-1" aria-hidden="true"><img src="{{ latest.data.cover }}" alt="" width="1536" height="1024" fetchpriority="high"></a>
+  {% if latest.data.cover %}<a class="featured-image" href="{{ latest.url }}" tabindex="-1" aria-hidden="true"><img src="{{ latest.data.cover }}" alt="" width="1536" height="1024" fetchpriority="high"></a>{% endif %}
 </section>
 <div class="editorial-strip"><span class="small-label">Inside the latest entry</span><div>{% for topic in latest.data.topics %}<a href="{{ latest.url }}#{{ topic.id }}">{{ topic.label }} <span aria-hidden="true">↗</span></a>{% endfor %}</div></div>
 <section class="recent-section" aria-labelledby="earlier-title">
   <div class="section-heading"><h2 id="earlier-title">Earlier fieldnotes</h2><a href="/archive/">The archive ↗</a></div>
   {% for post in collections.posts | olderPosts %}
-  <article class="earlier-story">
-    <a class="earlier-image" href="{{ post.url }}" tabindex="-1" aria-hidden="true"><img src="{{ post.data.cover }}" alt="" width="1536" height="1024" loading="lazy"></a>
+  <article class="earlier-story{% if not post.data.cover %} text-only{% endif %}">
+    {% if post.data.cover %}<a class="earlier-image" href="{{ post.url }}" tabindex="-1" aria-hidden="true"><img src="{{ post.data.cover }}" alt="" width="1536" height="1024" loading="lazy"></a>{% endif %}
     <div><div class="post-meta"><time datetime="{{ post.date | isoDate }}">{{ post.date | dateLabel }}</time><span>No. {{ post.data.issue }}</span></div><h3><a href="{{ post.url }}">{{ post.data.title }}</a></h3><p>{{ post.data.description }}</p><a class="read-link" href="{{ post.url }}">Read the fieldnote <span aria-hidden="true">↗</span></a></div>
   </article>
   {% endfor %}

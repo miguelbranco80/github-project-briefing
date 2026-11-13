@@ -18,18 +18,19 @@ fix that runtime defect. Use a working Add flow/version and inspect any partial
 result; do not stop the Gateway merely to retry the same command.
 
 Open the agent's chat and send Get started if CLI Add did not start onboarding.
-The bundled skill owns repository setup and the daily illustrated-blog workflow.
-Python 3.10+, Node.js/npm, authenticated gh, an image-generation tool and preview
-tools must be available on the agent's actual execution host, not just the
-developer's machine. Host policy still controls them.
+The bundled skill owns repository setup and the daily journal workflow.
+Python 3.10+, Node.js/npm, authenticated gh and portal access must be available
+on the requesting agent's actual execution host, not just the developer's
+machine. screen is optional for panel display. Image generation is not required.
+Host policy still controls tool access.
 
 ## First-run check
 
-Ask: Refresh now, build the illustrated journal, show the article and report
-collection, illustration and daily-delivery readiness.
+Ask: Refresh now, build the journal without decorative artwork, show the article
+and report collection, presentation and daily-delivery readiness.
 
 Then ask for a second refresh. Only meaningful new developments should produce
-another article. Earlier posts and art should remain. Inspect the installed
+another article. Earlier posts and any saved assets should remain. Inspect the installed
 09:00 UTC job and its actual delivery; a manifest declaration is not proof.
 Before setup, scheduled turns must remain quiet.
 

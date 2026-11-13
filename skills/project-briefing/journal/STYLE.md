@@ -16,9 +16,9 @@ Keep the home page practical: latest article, earlier entries and archive naviga
 
 Preserve the shared templates and CSS. Warm paper background, ink-blue text, muted vermilion accents, thin rules, generous spacing. Georgia for editorial headlines and long-form reading, system sans-serif for summaries/navigation, monospace for dates and small labels. No remote font dependency. No client-side app or analytics.
 
-Use the exact same page hierarchy for each post: issue/date → title → short description → topic line → generated editorial cover → article with a desktop contents rail → archive link. On mobile, stack the layout and keep the article readable without horizontal scrolling.
+Use the same page hierarchy for each post: issue/date → title → short description → topic line → article with a desktop contents rail → archive link. On mobile, stack the layout and keep the article readable without horizontal scrolling. Text-only is the normal format; do not fill image-free layouts with decorative placeholders.
 
-Keep the generated editorial covers and their established style; [ILLUSTRATIONS.md](ILLUSTRATIONS.md) owns the art direction. Covers are metaphors, not technical evidence.
+Preserve any existing artwork. [ILLUSTRATIONS.md](ILLUSTRATIONS.md) covers optional one-off decoration, not a per-entry requirement.
 
 ### Architecture diagrams: optional, evidence-led
 

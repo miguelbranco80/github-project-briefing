@@ -4,9 +4,6 @@ description: "One or two sentences explaining the practical change, not a list o
 date: YYYY-MM-DD
 issue: "NN"
 window: "Previous reviewed checkpoint → current reviewed cutoff, UTC."
-cover: /assets/illustrations/YYYY-MM-DD-slug.png
-coverAlt: "Describe the actual generated illustration."
-coverCaption: "A short editorial caption, not a technical claim."
 topics:
   - label: "First story"
     id: "the-first-engineering-change"

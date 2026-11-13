@@ -9,10 +9,10 @@ layout: base.njk
     <p class="article-dek">{{ description }}</p>
     <div class="topic-list">{% for topic in topics %}<span>{{ topic.label }}</span>{% endfor %}</div>
   </header>
-  <figure class="article-cover">
+  {% if cover %}<figure class="article-cover">
     <img src="{{ cover }}" alt="{{ coverAlt }}" width="1536" height="1024" fetchpriority="high">
-    <figcaption>{{ coverCaption }} <span>AI-generated editorial illustration.</span></figcaption>
-  </figure>
+    {% if coverCaption %}<figcaption>{{ coverCaption }}</figcaption>{% endif %}
+  </figure>{% endif %}
   <div class="article-layout">
     <aside class="article-aside">
       <div class="contents-label">In this entry</div>

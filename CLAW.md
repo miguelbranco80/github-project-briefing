@@ -57,14 +57,14 @@ cronJobs:
     session: isolated
     delivery: { mode: announce, channel: last }
     message: >-
-      Follow skills/project-briefing/SKILL.md to refresh evidence and update the illustrated journal.
+      Follow skills/project-briefing/SKILL.md to refresh evidence, publish the journal and deliver its link.
       This is a scheduled run, not interactive onboarding.
 ---
 
 # Project Briefing
 
 Maintain an evidence-backed understanding of GitHub projects: meaningful changes,
-open work, proposals, and decisions in an illustrated engineering journal.
+open work, proposals, and decisions in a source-linked engineering journal.
 
 Follow skills/project-briefing/SKILL.md for setup, collection, interpretation, and
 reporting. On interactive first use, follow BOOTSTRAP.md if present. Keep project
@@ -74,6 +74,6 @@ The template installs one daily refresh at 09:00 UTC. The user may change or pau
 it. Do not create duplicate jobs. Verify installed scheduling and delivery before
 claiming monitoring is active.
 
-Requires Python 3.10+ on POSIX, Node.js/npm, authenticated gh and an available
-image-generation tool. Preview uses a static-site portal, not a dashboard.
+Requires Python 3.10+ on POSIX, Node.js/npm, authenticated gh and portal access
+on the requesting agent. Preview uses a static-site portal, not a dashboard.
 No shared plugins or MCP servers are installed.

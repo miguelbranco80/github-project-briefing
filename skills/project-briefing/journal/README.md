@@ -2,7 +2,7 @@
 
 This directory is installed with the Project Briefing skill. The skill owns the
 single daily workflow; STYLE.md owns editorial and diagram choices,
-ILLUSTRATIONS.md owns generated-art direction, and templates/post.md is the
+ILLUSTRATIONS.md covers optional one-off artwork, and templates/post.md is the
 article starter. No external learned skill or development workspace is required.
 
 scripts/journal.py (beside this directory, under the skill's scripts/) prepares
@@ -13,8 +13,10 @@ overwrite the draft, archive or art; unfinished drafts cannot block other posts.
 
 The publish command builds and validates that site, then records the article
 as the run's briefing in the existing SQLite reporting table. A retry returns
-the existing output without rewriting it or resetting delivery. Here
-"publish" means updating local static output, not public hosting.
+the existing output and its serving paths without rewriting it or resetting
+delivery. Here "publish" means updating local static output, not public hosting.
+Neither a cover nor image-generation provenance is required. Existing optional
+covers still render; their paths and alt text are checked when supplied.
 
 The builder uses pinned Eleventy and Python 3.10+. It stages output and checks
 metadata, local links, images and heading anchors before replacing _site/.

@@ -21,9 +21,6 @@ def article_metadata(repo, run, since, finished):
         "window": f"{since} → {finished} (UTC)",
         "title": "TODO: explain the engineering change",
         "description": "TODO: state the practical consequence",
-        "cover": f"/assets/illustrations/run-{run}.png",
-        "coverAlt": "TODO: describe the generated image",
-        "coverCaption": "TODO: a short editorial caption",
         "topics": [{"label": "First story", "id": "the-first-engineering-change"}],
     }
 
@@ -62,10 +59,15 @@ def journal(workspace, repo, run, action):
             evidence = db.execute("SELECT since,finished FROM runs WHERE id=? AND repo=? AND status='complete'", (run, repo)).fetchone()
             if not evidence or not evidence[1]:
                 raise ValueError("Entry must reference a completed run for this repository")
+            site = state / "journal"
             existing = db.execute("SELECT briefing_path,delivery_status FROM run_outputs WHERE run_id=?", (run,)).fetchone()
             if existing:
-                return {"status": "recorded", "article": existing[0], "delivery_status": existing[1]}
-            site = state / "journal"
+                result = {"status": "recorded", "article": existing[0], "delivery_status": existing[1]}
+                article = Path(existing[0])
+                if article.parent == site / "src/posts":
+                    result.update(site_dir=str(site), output_dir=str(site / "_site"),
+                                  post_url=f"/posts/{article.stem}/")
+                return result
             if not site.resolve().is_relative_to(state):
                 raise ValueError("Journal must remain inside the project state directory")
             initialize(site, repo)
@@ -76,7 +78,6 @@ def journal(workspace, repo, run, action):
             article = published if published.exists() else draft
             result = {
                 "status": "draft", "site_dir": str(site), "article": str(article),
-                "cover": str(site / "src" / metadata["cover"].lstrip("/")),
                 "prompts": str(site / "image-prompts.json"),
                 "output_dir": str(site / "_site"),
                 "post_url": f"/posts/{article.stem}/",
@@ -95,11 +96,6 @@ def journal(workspace, repo, run, action):
             for key in ("run", "source", "date", "window"):
                 if actual.get(key) != metadata[key]:
                     raise ValueError(f"Do not change the collector-derived {key}")
-            images = json.loads((site / "image-prompts.json").read_text()).get("images", [])
-            cover = "src" + actual.get("cover", "")
-            if not any(image.get("post") == article.stem and image.get("asset") == cover
-                       and image.get("prompt") and image.get("tool") for image in images):
-                raise ValueError("Record the generated cover's post, asset, exact prompt and tool in image-prompts.json")
             if not (site / "node_modules/@11ty/eleventy/cmd.cjs").is_file():
                 subprocess.run(["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"], cwd=site, check=True, timeout=180, stdout=sys.stderr)
             moved = article == draft
@@ -112,7 +108,7 @@ def journal(workspace, repo, run, action):
                     published.rename(draft)
                 raise
             collect.record_output(db, repo, run, published, "pending")
-            return {**result, "article": str(published), "cover": str(site / cover),
+            return {**result, "article": str(published),
                     "status": "built", "delivery_status": "pending"}
         finally:
             db.close()

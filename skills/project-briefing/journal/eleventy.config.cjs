@@ -7,7 +7,9 @@ module.exports = function (eleventyConfig) {
     const posts = collectionApi.getFilteredByTag("posts");
     for (const post of posts) {
       const data = post.data;
-      for (const key of ["title", "description", "issue", "window", "cover", "coverAlt", "coverCaption"]) {
+      const required = ["title", "description", "issue", "window"];
+      if (data.cover != null) required.push("cover", "coverAlt");
+      for (const key of required) {
         if (typeof data[key] !== "string" || !data[key].trim() || data[key].startsWith("TODO:")) {
           throw new Error(`${post.inputPath}: missing ${key}`);
         }
@@ -15,10 +17,12 @@ module.exports = function (eleventyConfig) {
       if (Number.isNaN(new Date(data.date).getTime())) {
         throw new Error(`${post.inputPath}: missing or invalid date`);
       }
-      const cover = path.resolve(__dirname, "src", data.cover.slice(1));
-      const assets = path.resolve(__dirname, "src/assets") + path.sep;
-      if (!data.cover.startsWith("/assets/") || !cover.startsWith(assets) || !fs.existsSync(cover) || !fs.statSync(cover).isFile()) {
-        throw new Error(`${post.inputPath}: cover must be a saved local asset`);
+      if (data.cover != null) {
+        const cover = path.resolve(__dirname, "src", data.cover.slice(1));
+        const assets = path.resolve(__dirname, "src/assets") + path.sep;
+        if (!data.cover.startsWith("/assets/") || !cover.startsWith(assets) || !fs.existsSync(cover) || !fs.statSync(cover).isFile()) {
+          throw new Error(`${post.inputPath}: cover must be a saved local asset`);
+        }
       }
       if (!Array.isArray(data.topics) || !data.topics.length || data.topics.some(topic => !topic.label || !topic.id)) {
         throw new Error(`${post.inputPath}: topics need labels and heading ids`);

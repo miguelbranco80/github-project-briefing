@@ -58,23 +58,21 @@ class JournalTests(unittest.TestCase):
             (site / "node_modules").symlink_to(dependencies, target_is_directory=True)
         return result
 
-    def author(self, run=1):
+    def author(self, run=1, artwork=False):
         result = self.draft(run)
         article = Path(result["article"])
         metadata = json.loads(article.read_text().split("---", 2)[1])
         metadata.update(title=f"Engineering update {run}", description="An evidence-linked update with literal --- punctuation.",
-                        cover=f"/assets/illustrations/run-{run}.svg",
-                        coverAlt="Disposable test fixture.", coverCaption="Test artwork fixture.",
                         topics=[{"label": "Actual heading", "id": "actual-heading"}])
+        if artwork:
+            metadata.update(cover=f"/assets/illustrations/run-{run}.svg",
+                            coverAlt="Disposable test fixture.", coverCaption="Test artwork fixture.")
         article.write_text("---\n" + json.dumps(metadata, indent=2) +
                            "\n---\n\n## Actual heading\n\nA [primary source](https://example.com/source).\n")
-        site = Path(result["site_dir"])
-        (site / "src/assets/illustrations" / f"run-{run}.svg").write_text(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="20"><rect width="30" height="20" fill="navy"/></svg>')
-        prompts = json.loads(Path(result["prompts"]).read_text())
-        prompts["images"].append({"post": article.stem, "asset": "src" + metadata["cover"],
-                                  "prompt": "Disposable fixture, not generated production artwork.", "tool": "test-fixture"})
-        Path(result["prompts"]).write_text(json.dumps(prompts))
+        if artwork:
+            site = Path(result["site_dir"])
+            (site / "src/assets/illustrations" / f"run-{run}.svg").write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="20"><rect width="30" height="20" fill="navy"/></svg>')
         return result
 
     def test_prepare_is_generic_and_never_overwrites_draft(self):
@@ -82,6 +80,8 @@ class JournalTests(unittest.TestCase):
         article = Path(draft["article"])
         metadata = json.loads(article.read_text().split("---", 2)[1])
         self.assertEqual(metadata["window"], "2026-11-03T12:00:00Z → 2026-11-10T12:01:00Z (UTC)")
+        self.assertNotIn("cover", metadata)
+        self.assertNotIn("coverAlt", metadata)
         article.write_text(article.read_text() + "\nPreserve this draft.\n")
         before = article.read_bytes()
         self.command("prepare")
@@ -91,7 +91,7 @@ class JournalTests(unittest.TestCase):
         self.assertEqual(len(list(article.parent.glob("*.md"))), 1)
 
     def test_two_posts_archive_and_delivery_state_survive_retry(self):
-        first = self.author()
+        first = self.author(artwork=True)
         built = self.command("publish")
         self.assertEqual(built["status"], "built")
         article_hash = hashlib.sha256(Path(built["article"]).read_bytes()).hexdigest()
@@ -101,7 +101,12 @@ class JournalTests(unittest.TestCase):
         second = self.command("publish", 2)
         site = Path(second["site_dir"]) / "_site"
         homepage, archive = (site / "index.html").read_text(), (site / "archive/index.html").read_text()
-        featured = homepage.split('class="featured-story"', 1)[1].split("</section>", 1)[0]
+        featured = homepage.split('class="featured-story text-only"', 1)[1].split("</section>", 1)[0]
+        self.assertNotIn("<img", featured)
+        self.assertIn("run-1.svg", homepage)
+        second_html = (site / second["post_url"].lstrip("/") / "index.html").read_text()
+        self.assertNotIn('class="article-cover"', second_html)
+        self.assertNotIn('src=""', homepage + archive + second_html)
         self.assertIn("Engineering update 2", featured)
         for entry in (built, second):
             self.assertIn(entry["post_url"], archive)
@@ -115,6 +120,8 @@ class JournalTests(unittest.TestCase):
         retry = self.command("publish")
         self.assertEqual(retry["status"], "recorded")
         self.assertEqual(retry["delivery_status"], "confirmed")
+        self.assertEqual(retry["output_dir"], built["output_dir"])
+        self.assertEqual(retry["post_url"], built["post_url"])
         self.assertEqual(snapshot(site), before)
 
     def test_invalid_entry_retains_good_site_and_reporting_backlog(self):
@@ -124,10 +131,10 @@ class JournalTests(unittest.TestCase):
         draft = self.author(2)
         article = Path(draft["article"])
         good = article.read_text()
-        prompts = Path(draft["prompts"])
-        saved_prompts = prompts.read_text()
         variants = {
-            "missing asset": good.replace("run-2.svg", "absent.svg"),
+            "missing diagram": good + "\n![Request path](/assets/diagrams/absent.svg)\n",
+            "missing optional cover": good.replace('"topics":', '"cover": "/assets/absent.png", "coverAlt": "Missing optional art", "topics":'),
+            "cover without alt": good.replace('"topics":', '"cover": "/assets/favicon.svg", "topics":'),
             "broken anchor": good.replace('"id": "actual-heading"', '"id": "absent-heading"'),
             "broken link": good + "\n[Broken](/no-such-page/)\n",
             "placeholder": good.replace('"title": "Engineering update 2"', '"title": "TODO: headline"'),
@@ -141,11 +148,36 @@ class JournalTests(unittest.TestCase):
                 with sqlite3.connect(self.state / "activity.sqlite") as db:
                     self.assertIsNone(db.execute("SELECT 1 FROM run_outputs WHERE run_id=2").fetchone())
         article.write_text(good)
-        prompts.write_text('{"images":[]}')
-        self.command("publish", 2, succeeds=False)
-        self.assertEqual(snapshot(Path(first["output_dir"])), previous)
-        prompts.write_text(saved_prompts)
         self.assertEqual(self.command("publish", 2)["status"], "built")
+
+    def test_text_only_publication_needs_no_image_provenance(self):
+        draft = self.author()
+        Path(draft["prompts"]).unlink()
+        built = self.command("publish")
+        output = Path(built["output_dir"])
+        for page in (output / "index.html", output / "archive/index.html",
+                     output / built["post_url"].lstrip("/") / "index.html"):
+            self.assertNotIn("<img", page.read_text())
+        self.assertFalse(any((output / "assets/illustrations").glob("*")))
+
+    def test_optional_diagram_is_copied_and_linked_without_cover(self):
+        draft = self.author()
+        diagram = Path(draft["site_dir"]) / "src/assets/diagrams/request-path.svg"
+        diagram.parent.mkdir()
+        diagram.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 40" '
+                           'role="img" aria-label="Request path"><text x="5" y="25">'
+                           'Browser → API → database</text></svg>')
+        article = Path(draft["article"])
+        with article.open("a") as output:
+            output.write("\n![Request path](/assets/diagrams/request-path.svg)\n"
+                         "\nDiagram source: [reviewed implementation](https://example.com/source).\n")
+        built = self.command("publish")
+        output = Path(built["output_dir"])
+        html = (output / built["post_url"].lstrip("/") / "index.html").read_text()
+        self.assertIn('src="/assets/diagrams/request-path.svg"', html)
+        self.assertIn("https://example.com/source", html)
+        self.assertEqual((output / "assets/diagrams/request-path.svg").read_bytes(), diagram.read_bytes())
+        self.assertNotIn('class="article-cover"', html)
 
     def test_unfinished_draft_does_not_block_other_post(self):
         first = self.author()

@@ -26,8 +26,8 @@ def check(artifact):
                         "--ignore-scripts", "--no-audit", "--no-fund"], check=True, timeout=180)
         env = dict(os.environ, PROJECT_BRIEFING_TEST_PACKAGE=str(package))
         subprocess.run(["python3", "-m", "unittest", "discover", "-s", str(SOURCE / "tests"),
-                        "-p", "test_journal.py", "-v"], env=env, check=True, timeout=180)
-        print(f"Verified {len(files)} archive files and the journal workflow from extracted package code.")
+                        "-v"], env=env, check=True, timeout=180)
+        print(f"Verified {len(files)} archive files and the collection/journal workflow from extracted package code.")
 
 
 if __name__ == "__main__":

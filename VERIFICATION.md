@@ -1,5 +1,30 @@
 # Verification
 
+## Version 0.2.2: counted first-scan scope choices
+
+The collector now checks GitHub Search PR counts before the first successful
+baseline. If over budget or incomplete, it returns scope options without
+reading conversations or creating a run/checkpoint. Shorter windows are counted
+individually, not extrapolated from an average. The skill asks one combined
+days/limit question and preserves user approval; it does not guess progressively
+higher limits. Daily scans after a complete baseline keep the checkpoint path.
+
+37 tests pass, including six first-scan regressions: counted choices, approved
+limits, incomplete/malformed counts, real CLI stop/resume with either a raised
+limit or a shorter window, read-only estimation, blocker deduplication, and
+live-discovery protection against search undercounts. The archive check runs
+the complete suite against the extracted runtime code, not just journal tests.
+
+A read-only live estimate at 2026-11-13T00:24:45Z returned 925/649/189 PRs for
+7/3/1 days and suggested limits of 1,200/800/300. No evidence scan was run.
+Search counts are indexed estimates, not a transactional inventory or a runtime
+forecast; conversation, commit and release volume can vary independently.
+
+The targeted installed-agent update changes only SKILL.md and collect.py after
+comparison with the previous template revision and a backup. Saved project
+scope, evidence, articles, checkpoint and existing automation remain unchanged.
+This does not resolve the scheduled portal/delivery blockers recorded below.
+
 ## Version 0.2.1: text-first journal and one workflow owner
 
 31 tests pass against disposable generic project records. Coverage includes:

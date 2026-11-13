@@ -1,3 +1,4 @@
+import os
 import importlib.util
 import json
 from pathlib import Path
@@ -5,7 +6,7 @@ import subprocess
 import tempfile
 import unittest
 
-spec=importlib.util.spec_from_file_location('refresh',Path(__file__).parents[1]/'skills/project-briefing/scripts/refresh.py')
+spec=importlib.util.spec_from_file_location('refresh',Path(os.environ.get('PROJECT_BRIEFING_TEST_PACKAGE', Path(__file__).parents[1]))/'skills/project-briefing/scripts/refresh.py')
 r=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(r)
 
@@ -57,7 +58,7 @@ class RefreshTests(unittest.TestCase):
         import sys
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); binary=root/'gh'
-            binary.write_text('#!/usr/bin/env python3\nimport json,sys\ne=sys.argv[2]\nprint(json.dumps({"default_branch":"main"} if e=="repos/org/a" else []))\n')
+            binary.write_text('#!/usr/bin/env python3\nimport json,sys\ne=sys.argv[2]\nprint(json.dumps({"total_count":0,"incomplete_results":False} if e.startswith("search/issues?") else {"default_branch":"main"} if e=="repos/org/a" else []))\n')
             binary.chmod(0o700)
             (root/'projects.json').write_text(json.dumps({'projects':[{'repo':'org/a','state_dir':'data/a'}]}))
             env=dict(os.environ,PATH=str(root)+os.pathsep+os.environ['PATH'])

@@ -1,3 +1,4 @@
+import os
 import importlib.util
 from pathlib import Path
 import tempfile
@@ -5,7 +6,7 @@ import subprocess
 import sys
 import unittest
 
-spec = importlib.util.spec_from_file_location("collect", Path(__file__).parents[1] / "skills/project-briefing/scripts/collect.py")
+spec = importlib.util.spec_from_file_location("collect", Path(os.environ.get("PROJECT_BRIEFING_TEST_PACKAGE", Path(__file__).parents[1])) / "skills/project-briefing/scripts/collect.py")
 c = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(c)
 

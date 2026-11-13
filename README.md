@@ -15,8 +15,8 @@ npm ci --prefix skills/project-briefing/journal --ignore-scripts --no-audit --no
 python3 -m unittest discover -s tests -v
 openclaw templates validate .
 openclaw templates dev .
-openclaw templates build . --out dist/project-briefing-0.2.1.tgz
-python3 tests/check_archive.py dist/project-briefing-0.2.1.tgz
+openclaw templates build . --out dist/project-briefing-0.2.2.tgz
+python3 tests/check_archive.py dist/project-briefing-0.2.2.tgz
 ~~~
 
 The tests use disposable workspaces and fake GitHub responses. They exercise
@@ -28,7 +28,8 @@ or credentials enter the package.
 
 - CLAW.md declares installed files and the single daily job.
 - BOOTSTRAP.md starts onboarding; skills/project-briefing/SKILL.md owns the workflow.
-- scripts/collect.py owns bounded collection and reporting records; refresh.py
+- scripts/collect.py owns first-scan workload estimates, bounded collection and
+  reporting records; refresh.py
   owns configuration checks, independent refreshes and blocker deduplication.
 - scripts/journal.py binds articles to completed runs, initializes each project's
   blog, builds it and records outputs. The journal directory supplies the portable

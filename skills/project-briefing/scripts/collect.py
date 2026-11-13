@@ -46,6 +46,44 @@ def pages(endpoint, stop=None, fetch=api, max_items=1000):
             return result
     raise RuntimeError(f"Pagination safety limit reached: {endpoint}")
 
+def baseline_plan(repo, days=7, max_prs=100, fetch=api):
+    """Count indexed PRs before an uncached scan; never read conversations here."""
+    observed = now()
+    anchor = dt.datetime.fromisoformat(observed.replace("Z", "+00:00"))
+    def estimate(window):
+        since = (anchor - dt.timedelta(days=window)).isoformat(timespec="seconds").replace("+00:00", "Z")
+        query = urllib.parse.urlencode({"q": f"repo:{repo} is:pr updated:>={since}", "per_page": 1})
+        result = fetch(f"search/issues?{query}")
+        if (not isinstance(result, dict) or type(result.get("total_count")) is not int
+                or result["total_count"] < 0 or type(result.get("incomplete_results")) is not bool):
+            raise RuntimeError("GitHub returned no usable PR workload estimate; no scan started.")
+        return {"days": window, "since": since, "estimated_prs": result["total_count"],
+                "incomplete_results": result["incomplete_results"]}
+
+    estimates = [estimate(days)]
+    first = estimates[0]
+    needs_scope = first["incomplete_results"] or first["estimated_prs"] > max_prs
+    if needs_scope:
+        estimates.extend(estimate(window) for window in (3, 1) if window < days)
+    options = []
+    if needs_scope:
+        for row in estimates:
+            # An incomplete count cannot justify a sufficient budget.
+            if row["incomplete_results"]:
+                continue
+            count = row["estimated_prs"]
+            budget = max_prs
+            if count > budget:
+                budget = ((count + (count + 4) // 5 + 99) // 100) * 100
+            options.append({"days": row["days"], "estimated_prs": count, "max_prs": budget})
+    plan = {"status": "needs_scope" if needs_scope else "ready", "observed_at": observed,
+            "requested_days": days, "configured_max_prs": max_prs,
+            "estimates": estimates, "options": options,
+            "note": "GitHub search estimates may lag live activity; PR counts are not runtime estimates. Collection still enforces the approved limit. Raised options include 20% headroom rounded up to 100."}
+    if needs_scope:
+        plan["error"] = "Initial scan needs a scope choice: keep the window and raise max_prs, or reduce days using the counted options. No scan started."
+    return plan
+
 def connect(path):
     db = sqlite3.connect(path, timeout=10)
     db.executescript("""
@@ -239,17 +277,21 @@ def main():
     parser.add_argument("--days", type=int, default=7)
     parser.add_argument("--reconcile", action="store_true")
     parser.add_argument("--max-prs", type=int, default=100, help="Maximum recently updated PRs; discovery stops on overflow before conversation reads")
+    parser.add_argument("--estimate", action="store_true", help="Read first-scan PR counts and scope options without creating local state")
     parser.add_argument("--pending", action="store_true", help="Recover ledgers and list separate writing and delivery queues offline")
     parser.add_argument("--record-output", type=int, metavar="RUN", help="Record a saved briefing and its observed delivery status")
     parser.add_argument("--briefing-path", type=Path)
     parser.add_argument("--delivery-status", choices=["pending", "confirmed", "uncertain", "not_needed"], default="pending")
     args = parser.parse_args()
-    if args.pending and args.record_output is not None:
-        parser.error("--pending and --record-output are mutually exclusive")
+    if sum((args.pending, args.estimate, args.record_output is not None)) > 1:
+        parser.error("--pending, --estimate and --record-output are mutually exclusive")
     if args.record_output is not None and args.briefing_path is None:
         parser.error("--record-output requires --briefing-path")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo) or args.days < 1 or args.max_prs < 1:
         parser.error("Use owner/repository and positive --days / --max-prs")
+    if args.estimate:
+        print(json.dumps(baseline_plan(args.repo, args.days, args.max_prs)))
+        return
     args.state_dir.mkdir(parents=True, exist_ok=True)
     # One writer per state directory, including collection (prevents competing checkpoints).
     import fcntl
@@ -271,6 +313,15 @@ def main():
         if args.pending:
             print(json.dumps({"pending_outputs": pending_outputs(db, args.repo), "delivery_outputs": delivery_outputs(db, args.repo)}))
             return
+        if not db.execute("SELECT 1 FROM runs WHERE repo=? AND status='complete' LIMIT 1", (args.repo,)).fetchone():
+            try:
+                plan = baseline_plan(args.repo, args.days, args.max_prs)
+            except Exception as exc:
+                print(json.dumps({"status": "failed", "error": str(exc)}))
+                raise SystemExit(1)
+            if plan["status"] == "needs_scope":
+                print(json.dumps(plan))
+                raise SystemExit(1)
         try:
             run, count = refresh(db, args.repo, args.days, args.reconcile,
                                  collector=lambda db, repo, since, until, reconcile: collect(

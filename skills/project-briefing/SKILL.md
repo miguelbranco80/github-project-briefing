@@ -54,10 +54,21 @@ refreshes, processes repositories independently and deduplicates collection
 blockers. Report new alerts only; retry on the next daily run, not in a loop.
 
 Defaults: seven-day baseline, then 24-hour checkpoint overlap; 100 recent PRs
-and 1,000 records per other evidence stream. Overflow fails without advancing
-the checkpoint. Never silently shorten the window or increase budgets; explain
-the workload and save explicit user-approved changes in projects.json.
-days changes only the initial scan. Use collect.py --reconcile for stale caches.
+and 1,000 records per other evidence stream. Before the first scan, the collector
+checks GitHub PR counts. If over budget or incomplete, it returns needs_scope
+without reading conversations or creating a run/checkpoint. Present its counted
+options in one question: retain the requested window with a sufficient limit,
+or shorten it (normally three days or one day). Show both days and limit for each
+option; a shorter window can still require a higher limit. Recommend a choice
+based on the user's priorities; do not guess successive higher limits.
+
+Counts are indexed estimates, not runtime promises. Do not treat incomplete
+counts as complete. Live discovery still fails on overflow without advancing
+the checkpoint; use collect.py --estimate with the configured days/max-prs to
+refresh the options before another scope question. Never silently shorten the
+window or increase budgets; save explicit user-approved changes in projects.json.
+days changes only the initial scan. Scheduled runs report a new scope blocker
+without starting an onboarding dialogue. Use collect.py --reconcile for stale caches.
 
 ## 3. Investigate
 

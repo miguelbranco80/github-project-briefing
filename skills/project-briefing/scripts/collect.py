@@ -29,11 +29,18 @@ def api(endpoint):
             raise RuntimeError(f"GitHub read failed: {endpoint}: {status.group(0) if status else 'check gh authentication and repository access'}")
         time.sleep(2 ** attempt)
 
-def pages(endpoint, stop=None, fetch=api, max_items=1000):
+def pages(endpoint, stop=None, fetch=api, max_items=1000, search=False):
     result = []
     for page in range(1, 1001):
         sep = "&" if "?" in endpoint else "?"
         batch = fetch(f"{endpoint}{sep}per_page=100&page={page}")
+        if search:
+            if (not isinstance(batch, dict) or batch.get("incomplete_results") is not False
+                    or type(batch.get("total_count")) is not int or batch["total_count"] < 0
+                    or batch["total_count"] > min(max_items, 1000)):
+                raise RuntimeError("PR search is incomplete or exceeds the collection/search limit; narrow pr_filter and try an estimate. No checkpoint advanced.")
+            total = batch["total_count"]
+            batch = batch.get("items")
         if not isinstance(batch, list):
             raise RuntimeError(f"Expected a list: {endpoint}")
         for item in batch:
@@ -42,17 +49,24 @@ def pages(endpoint, stop=None, fetch=api, max_items=1000):
             if len(result) >= max_items:
                 raise RuntimeError(f"Read budget exceeded: {endpoint}; more than {max_items} records. PR discovery uses --max-prs; other evidence streams have a fixed cap. No checkpoint advanced.")
             result.append(item)
-        if len(batch) < 100:
+        if search and len(batch) < 100 and len(result) < total:
+            raise RuntimeError("PR search returned fewer matches than reported; no checkpoint advanced.")
+        if len(batch) < 100 or (search and len(result) >= total):
             return result
     raise RuntimeError(f"Pagination safety limit reached: {endpoint}")
 
-def baseline_plan(repo, days=7, max_prs=100, fetch=api):
+def pr_query(repo, since, pr_filter=""):
+    if (not isinstance(pr_filter, str) or re.search(r"\b(?:repo|org|user|is|type|updated)\s*:|\bOR\b", pr_filter, re.I)):
+        raise ValueError("pr_filter accepts GitHub PR search terms (labels, authors, keywords), not repo/org/user/is/type/updated qualifiers or OR")
+    return f"repo:{repo} is:pr updated:>={since} {pr_filter}".strip()
+
+def baseline_plan(repo, days=7, max_prs=100, fetch=api, pr_filter=""):
     """Count indexed PRs before an uncached scan; never read conversations here."""
     observed = now()
     anchor = dt.datetime.fromisoformat(observed.replace("Z", "+00:00"))
     def estimate(window):
         since = (anchor - dt.timedelta(days=window)).isoformat(timespec="seconds").replace("+00:00", "Z")
-        query = urllib.parse.urlencode({"q": f"repo:{repo} is:pr updated:>={since}", "per_page": 1})
+        query = urllib.parse.urlencode({"q": pr_query(repo, since, pr_filter), "per_page": 1})
         result = fetch(f"search/issues?{query}")
         if (not isinstance(result, dict) or type(result.get("total_count")) is not int
                 or result["total_count"] < 0 or type(result.get("incomplete_results")) is not bool):
@@ -62,26 +76,29 @@ def baseline_plan(repo, days=7, max_prs=100, fetch=api):
 
     estimates = [estimate(days)]
     first = estimates[0]
-    needs_scope = first["incomplete_results"] or first["estimated_prs"] > max_prs
+    limit = min(max_prs, 1000) if pr_filter else max_prs
+    needs_scope = first["incomplete_results"] or first["estimated_prs"] > limit
     if needs_scope:
         estimates.extend(estimate(window) for window in (3, 1) if window < days)
     options = []
     if needs_scope:
         for row in estimates:
             # An incomplete count cannot justify a sufficient budget.
-            if row["incomplete_results"]:
+            if row["incomplete_results"] or (pr_filter and row["estimated_prs"] > 1000):
                 continue
             count = row["estimated_prs"]
             budget = max_prs
             if count > budget:
                 budget = ((count + (count + 4) // 5 + 99) // 100) * 100
+            if pr_filter:
+                budget = min(budget, 1000)
             options.append({"days": row["days"], "estimated_prs": count, "max_prs": budget})
     plan = {"status": "needs_scope" if needs_scope else "ready", "observed_at": observed,
-            "requested_days": days, "configured_max_prs": max_prs,
+            "requested_days": days, "configured_max_prs": max_prs, "pr_filter": pr_filter,
             "estimates": estimates, "options": options,
-            "note": "GitHub search estimates may lag live activity; PR counts are not runtime estimates. Collection still enforces the approved limit. Raised options include 20% headroom rounded up to 100."}
+            "note": "GitHub search estimates may lag live activity; PR counts are not runtime estimates. Collection still enforces the approved limit. Raised options target 20% headroom rounded up to 100, capped at 1,000 for filtered search."}
     if needs_scope:
-        plan["error"] = "Initial scan needs a scope choice: keep the window and raise max_prs, or reduce days using the counted options. No scan started."
+        plan["error"] = "Initial scan needs a scope choice: try a narrower pr_filter, or change days/max_prs using the counted options. Filtered search is capped at 1,000 PRs. No scan started."
     return plan
 
 def connect(path):
@@ -100,6 +117,8 @@ def connect(path):
       run_id INTEGER, kind TEXT, key TEXT, before_json TEXT, after_json TEXT,
       UNIQUE(run_id,kind,key));
     """)
+    if "pr_filter" not in {row[1] for row in db.execute("PRAGMA table_info(runs)")}:
+        db.execute("ALTER TABLE runs ADD COLUMN pr_filter TEXT NOT NULL DEFAULT ''")
     return db
 
 def canonical(value):
@@ -119,18 +138,21 @@ def save(db, run, repo, records):
         changed += 1
     return changed
 
-def collect(db, repo, since, until, reconcile=False, fetch=api, max_prs=100):
+def collect(db, repo, since, until, reconcile=False, fetch=api, max_prs=100, pr_filter=""):
     base = f"repos/{repo}"
-    metadata = fetch(base)
     # Updated order lets discovery stop at the window boundary or budget,
     # without enumerating the repository's dormant open backlog.
-    recent = pages(f"{base}/pulls?state=all&sort=updated&direction=desc",
-                   stop=lambda p: p["updated_at"] < since,
-                   fetch=fetch, max_items=max_prs)
+    if pr_filter:
+        query = urllib.parse.urlencode({"q": pr_query(repo, since, pr_filter), "sort": "updated", "order": "desc"})
+        recent = pages(f"search/issues?{query}", fetch=fetch, max_items=max_prs, search=True)
+    else:
+        recent = pages(f"{base}/pulls?state=all&sort=updated&direction=desc",
+                       stop=lambda p: p["updated_at"] < since,
+                       fetch=fetch, max_items=max_prs)
     prs = {str(p["number"]): p for p in recent}
     previous = {key: json.loads(body) for key, body in db.execute(
         "SELECT key,payload FROM objects WHERE repo=? AND kind='pr'", (repo,))}
-    if reconcile:
+    if reconcile and not pr_filter:
         for key, old in previous.items():
             if key not in prs and old["pr"]["state"] == "open":
                 if len(prs) >= max_prs:
@@ -140,10 +162,13 @@ def collect(db, repo, since, until, reconcile=False, fetch=api, max_prs=100):
     def detail(pair):
         key, p = pair
         old = previous.get(key)
+        if pr_filter:
+            p = fetch(f"{base}/pulls/{key}")
         if not reconcile and old and old["pr"]["updated_at"] == p["updated_at"] and old["pr"]["head"]["sha"] == p["head"]["sha"] and "files" not in old:
             return "pr", key, old
         # Fetch detail first; activity arriving afterward is picked up by overlap next run.
-        p = fetch(f"{base}/pulls/{key}")
+        if not pr_filter:
+            p = fetch(f"{base}/pulls/{key}")
         result = {"pr": p,
                   "comments": pages(f"{base}/issues/{key}/comments", fetch=fetch),
                   "reviews": pages(f"{base}/pulls/{key}/reviews", fetch=fetch),
@@ -152,6 +177,9 @@ def collect(db, repo, since, until, reconcile=False, fetch=api, max_prs=100):
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         records = list(pool.map(detail, prs.items()))
+    if pr_filter:
+        return records
+    metadata = fetch(base)
     branch = urllib.parse.quote(metadata["default_branch"], safe="")
     commits = pages(f"{base}/commits?sha={branch}&since={since}&until={until}", fetch=fetch)
     records.extend(("commit", c["sha"], c) for c in commits)
@@ -165,14 +193,19 @@ def clean(value):
     return " ".join(str(value or "").replace("|", "/").split())
 
 def render(db, run):
-    row = db.execute("SELECT repo,started,finished,status,since,error FROM runs WHERE id=?", (run,)).fetchone()
-    repo, started, finished, status, since, error = row
+    row = db.execute("SELECT repo,started,finished,status,since,error,pr_filter FROM runs WHERE id=?", (run,)).fetchone()
+    repo, started, finished, status, since, error, pr_filter = row
     prior = db.execute("SELECT count(*) FROM runs WHERE repo=? AND status='complete' AND id<?", (repo,run)).fetchone()[0]
+    coverage = f"Window starts {since}. Includes PRs updated in the window (not the entire open backlog), default-branch commits in the window, and current releases. Reconciliation may also revisit previously tracked open PRs."
+    discovery = "Incremental scans reuse unchanged PRs; use --reconcile to re-fetch recent and previously tracked open PR conversations. Each paginated evidence stream is limited to 1,000 records; exceeding a limit fails the scan. GitHub is not a transactional snapshot."
+    if pr_filter:
+        coverage = f"Window starts {since}. PR-only coverage using GitHub search filter: {clean(pr_filter)}. Repository-wide commits and releases are NOT collected."
+        discovery = "GitHub search is indexed, may lag live activity and is capped at 1,000 matches. Reconciliation re-reads matching PRs in this window only. Unchanged conversations are reused. Each conversation stream is capped at 1,000 records. Incomplete/oversized searches fail without advancing the checkpoint."
     lines = [f"# {repo}: {'baseline' if not prior else 'changes'}", "",
              f"Run {run}; status: {status}; started: {started}; finished: {finished or 'not completed'}.",
-             f"Window starts {since}. Includes PRs updated in the window (not the entire open backlog), default-branch commits in the window, and current releases. Reconciliation may also revisit previously tracked open PRs.",
+             coverage,
              "PR descriptions, issue comments and review summaries are captured; patches, changed files and inline diff comments are not fetched by default. GitHub Discussions, ordinary issues, CI, RFC file contents, and deployment proof are NOT covered.",
-             "Incremental scans reuse unchanged PRs; use --reconcile to re-fetch recent and previously tracked open PR conversations. Each paginated evidence stream is limited to 1,000 records; exceeding a limit fails the scan. GitHub is not a transactional snapshot.", ""]
+             discovery, ""]
     if status != "complete":
         return "\n".join(lines + [f"Coverage incomplete: {clean(error)}. Last successful checkpoint retained.", ""])
     groups = {"Merged PRs": [], "Open PRs / updates": [], "Closed without merge": [], "Default-branch commits": [], "Releases": []}
@@ -206,15 +239,18 @@ def render(db, run):
     lines += ["## Interpretation boundary", "", "This is a factual activity ledger, not a decision summary. Read the stored bodies and conversations before drawing conclusions. Merged code is not deployment proof; a merged proposal is not implementation.", ""]
     return "\n".join(lines)
 
-def refresh(db, repo, days=7, reconcile=False, collector=collect):
+def refresh(db, repo, days=7, reconcile=False, collector=None, pr_filter=""):
     started = now()
-    last = db.execute("SELECT started FROM runs WHERE repo=? AND status='complete' ORDER BY id DESC LIMIT 1", (repo,)).fetchone()
+    last = db.execute("SELECT started,pr_filter FROM runs WHERE repo=? AND status='complete' ORDER BY id DESC LIMIT 1", (repo,)).fetchone()
+    if last and last[1] != pr_filter:
+        last = None
     anchor = dt.datetime.fromisoformat(last[0].replace("Z","+00:00")) if last else dt.datetime.now(dt.timezone.utc)
     since = (anchor - dt.timedelta(hours=24) if last else anchor - dt.timedelta(days=days)).isoformat(timespec="seconds").replace("+00:00","Z")
-    run = db.execute("INSERT INTO runs(repo,started,status,since) VALUES(?,?,'running',?)", (repo,started,since)).lastrowid
+    run = db.execute("INSERT INTO runs(repo,started,status,since,pr_filter) VALUES(?,?,'running',?,?)", (repo,started,since,pr_filter)).lastrowid
     db.commit()
     try:
-        records = collector(db, repo, since, started, reconcile)
+        records = (collect(db, repo, since, started, reconcile, pr_filter=pr_filter)
+                   if collector is None else collector(db, repo, since, started, reconcile))
         with db:
             count = save(db, run, repo, records)
             db.execute("UPDATE runs SET status='complete',finished=? WHERE id=?", (now(),run))
@@ -277,6 +313,7 @@ def main():
     parser.add_argument("--days", type=int, default=7)
     parser.add_argument("--reconcile", action="store_true")
     parser.add_argument("--max-prs", type=int, default=100, help="Maximum recently updated PRs; discovery stops on overflow before conversation reads")
+    parser.add_argument("--pr-filter", default="", help="Optional GitHub PR search terms; matching PRs only, excluding repository-wide commits/releases")
     parser.add_argument("--estimate", action="store_true", help="Read first-scan PR counts and scope options without creating local state")
     parser.add_argument("--pending", action="store_true", help="Recover ledgers and list separate writing and delivery queues offline")
     parser.add_argument("--record-output", type=int, metavar="RUN", help="Record a saved briefing and its observed delivery status")
@@ -289,8 +326,13 @@ def main():
         parser.error("--record-output requires --briefing-path")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo) or args.days < 1 or args.max_prs < 1:
         parser.error("Use owner/repository and positive --days / --max-prs")
+    args.pr_filter = args.pr_filter.strip()
+    try:
+        pr_query(args.repo, now(), args.pr_filter)
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.estimate:
-        print(json.dumps(baseline_plan(args.repo, args.days, args.max_prs)))
+        print(json.dumps(baseline_plan(args.repo, args.days, args.max_prs, pr_filter=args.pr_filter)))
         return
     args.state_dir.mkdir(parents=True, exist_ok=True)
     # One writer per state directory, including collection (prevents competing checkpoints).
@@ -313,9 +355,10 @@ def main():
         if args.pending:
             print(json.dumps({"pending_outputs": pending_outputs(db, args.repo), "delivery_outputs": delivery_outputs(db, args.repo)}))
             return
-        if not db.execute("SELECT 1 FROM runs WHERE repo=? AND status='complete' LIMIT 1", (args.repo,)).fetchone():
+        last = db.execute("SELECT pr_filter FROM runs WHERE repo=? AND status='complete' ORDER BY id DESC LIMIT 1", (args.repo,)).fetchone()
+        if not last or last[0] != args.pr_filter:
             try:
-                plan = baseline_plan(args.repo, args.days, args.max_prs)
+                plan = baseline_plan(args.repo, args.days, args.max_prs, pr_filter=args.pr_filter)
             except Exception as exc:
                 print(json.dumps({"status": "failed", "error": str(exc)}))
                 raise SystemExit(1)
@@ -325,7 +368,8 @@ def main():
         try:
             run, count = refresh(db, args.repo, args.days, args.reconcile,
                                  collector=lambda db, repo, since, until, reconcile: collect(
-                                     db, repo, since, until, reconcile, max_prs=args.max_prs))
+                                     db, repo, since, until, reconcile, max_prs=args.max_prs, pr_filter=args.pr_filter),
+                                 pr_filter=args.pr_filter)
         except Exception:
             run = db.execute("SELECT max(id) FROM runs").fetchone()[0]
             report = args.state_dir / f"run-{run}.md"

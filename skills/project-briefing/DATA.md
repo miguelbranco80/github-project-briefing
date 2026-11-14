@@ -2,13 +2,16 @@
 
 Each project's state directory contains activity.sqlite and Markdown reports.
 Workspace refresh.sqlite stores blocker signatures only. projects.json owns
-project preferences and approved collection budgets. No credentials belong here.
+project preferences, optional pr_filter and approved collection budgets. A short
+research.md in each project state directory records the agreed focus, tested
+queries, observed workload and research lessons; the agent maintains it in plain
+English, not a separate planning system. No credentials belong here.
 
 ## Schema
 
 | Table | Purpose |
 |---|---|
-| runs | Repository, start/end, coverage start, complete/failed state and error |
+| runs | Repository, start/end, coverage start, PR filter, complete/failed state and error |
 | objects | Latest source payload by repository, kind and GitHub ID |
 | changes | Immutable per-run before/after payloads |
 | run_outputs | Saved briefing path and delivery status, independently of collection |
@@ -30,6 +33,15 @@ collector does not erase historical evidence.
 
 Source discussions can themselves quote code. Lightweight collection is not a
 guarantee that no user-written code appears in a payload.
+
+With pr_filter, discovery uses GitHub PR search; only matching PRs and their
+conversations are collected. Repository-wide commits and releases are omitted.
+The ledger stores the exact filter used by each run, including failures, rather
+than inferring historical coverage from current settings. Search indexing may lag;
+incomplete results or more than min(max_prs, 1000) matches fail before reading
+conversations. Reconciliation re-reads matching PRs in the window only. Changing
+or removing the filter starts a new baseline over configured days; unchanged
+filters retain the usual checkpoint overlap. Existing records and outputs remain.
 
 The collector does not inventory dormant open PRs, ordinary issues, GitHub
 Discussions, CI, RFC contents, deployment proof or verified maintainer rosters.

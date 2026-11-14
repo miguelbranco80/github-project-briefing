@@ -36,6 +36,8 @@ def projects(root):
         for field in ("priorities", "watchlist"):
             if not isinstance(row.get(field, []), list) or not all(isinstance(v, str) for v in row.get(field, [])):
                 raise ValueError(f"{field} must be an array of strings")
+        if not isinstance(row.get("pr_filter", ""), str):
+            raise ValueError("pr_filter must be a GitHub PR search string")
     return rows
 
 def run(root, execute=subprocess.run):
@@ -73,6 +75,8 @@ def run(root, execute=subprocess.run):
             command = [sys.executable, str(Path(__file__).with_name("collect.py")),
                        "--repo", row["repo"], "--state-dir", str(root / row["state_dir"]),
                        "--days", str(row.get("days", 7)), "--max-prs", str(row.get("max_prs", 100))]
+            if row.get("pr_filter", "").strip():
+                command.append("--pr-filter=" + row["pr_filter"].strip())
             result = execute(command, capture_output=True, text=True)
             try:
                 payload = json.loads(result.stdout)

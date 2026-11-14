@@ -14,8 +14,12 @@ skills/project-briefing/SKILL.md directly and never onboard.
 3. Follow the skill's Configuration and readiness section to save configuration
    and check GitHub access, required tools and the existing daily job's schedule
    and destination. Preserve existing data and user settings; do not create a
-   second daily job. If starting the first scan, use the skill's counted scope
-   choices rather than guessing higher limits.
+   second daily job. Before a full scan, scout recent activity, labels and project
+   structure using the skill's research-scope guidance. For a busy repository,
+   help the user choose an area or a broad editorial selection; try a small sample
+   and explain relevance, volume and exclusions before saving the focus. Offer
+   narrowing the focus alongside fewer days or a higher counted limit, not a
+   sequence of guessed limits. Save the working approach for future runs.
 4. Explain what was configured, when the next update is due and what is ready or
    blocked. Distinguish collection, blog presentation and notification delivery;
    do not describe an enabled schedule as verified delivery. Give a concrete next

@@ -58,6 +58,23 @@ class BaselineTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "no usable PR workload estimate"):
                 c.baseline_plan("org/repo", fetch=lambda endpoint: bad)
 
+    def test_filtered_estimates_use_same_query_and_respect_search_ceiling(self):
+        calls = []
+        counts = iter([1200, 925, 40])
+        def fetch(endpoint):
+            calls.append(endpoint)
+            return {"total_count": next(counts), "incomplete_results": False}
+        plan = c.baseline_plan("org/repo", max_prs=100, fetch=fetch, pr_filter="label:security")
+        self.assertEqual(plan["status"], "needs_scope")
+        self.assertEqual(plan["options"], [
+            {"days": 3, "estimated_prs": 925, "max_prs": 1000},
+            {"days": 1, "estimated_prs": 40, "max_prs": 100}])
+        self.assertTrue(all(urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)["q"][0].endswith(" label:security") for url in calls))
+        plan = c.baseline_plan("org/repo", max_prs=2000, pr_filter="label:security",
+                               fetch=lambda url: {"total_count": 1200, "incomplete_results": False})
+        self.assertEqual(plan["status"], "needs_scope")
+        self.assertEqual(plan["options"], [])
+
     def workspace(self, root, counts=None, incomplete=False, discovered=0):
         (root / "counts.json").write_text(json.dumps({
             "counts": counts or {"7": 1052, "3": 420, "1": 60},
@@ -71,9 +88,9 @@ with (root / "calls.jsonl").open("a") as log:
 config = json.loads((root / "counts.json").read_text())
 if endpoint.startswith("search/issues?"):
     query = urllib.parse.parse_qs(urllib.parse.urlsplit(endpoint).query)["q"][0]
-    since = dt.datetime.fromisoformat(query.split("updated:>=")[1].replace("Z", "+00:00"))
+    since = dt.datetime.fromisoformat(query.split("updated:>=")[1].split()[0].replace("Z", "+00:00"))
     days = round((dt.datetime.now(dt.timezone.utc) - since).total_seconds() / 86400)
-    result = {"total_count": config["counts"][str(days)], "incomplete_results": config["incomplete"]}
+    result = {"total_count": config["counts"][str(days)], "incomplete_results": config["incomplete"], "items": []}
 elif endpoint == "repos/org/repo":
     result = {"default_branch": "main"}
 elif "/pulls?" in endpoint:
@@ -137,6 +154,31 @@ print(json.dumps(result))
             self.assertFalse(state.exists())
             self.assertEqual(self.refresh(root, env)["projects"][0]["status"], "needs_scope")
             self.assertTrue(all(url.startswith("search/issues?") for url in self.calls(root)))
+
+    def test_filtered_daily_cli_and_changed_scope(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config, env = self.workspace(root, counts={"7": 0, "1": 0})
+            saved = json.loads(config.read_text())
+            saved["projects"][0]["pr_filter"] = "label:security"
+            config.write_text(json.dumps(saved))
+            for pr_filter, counts_expected in (("label:security", True), ("label:security", False), ("label:bug", True)):
+                saved["projects"][0]["pr_filter"] = pr_filter
+                config.write_text(json.dumps(saved))
+                (root / "calls.jsonl").write_text("")
+                result = self.refresh(root, env)
+                self.assertEqual(result["projects"][0]["status"], "complete")
+                self.assertEqual(json.loads(config.read_text()), saved)
+                calls = self.calls(root)
+                self.assertTrue(all(url.startswith("search/issues?") for url in calls))
+                queries = [urllib.parse.parse_qs(urllib.parse.urlsplit(url).query) for url in calls]
+                self.assertEqual(any(q["per_page"] == ["1"] for q in queries), counts_expected)
+                self.assertTrue(all(q["q"][0].endswith(" " + pr_filter) for q in queries))
+            with closing(sqlite3.connect(root / "data/repo/activity.sqlite")) as db:
+                self.assertEqual([row[0] for row in db.execute("SELECT pr_filter FROM runs ORDER BY id")],
+                                 ["label:security", "label:security", "label:bug"])
+            self.assertIn("label:security", (root / "data/repo/run-1.md").read_text())
+            self.assertEqual(json.loads(config.read_text()), saved)
 
     def test_search_undercount_still_stops_before_conversation_reads(self):
         with tempfile.TemporaryDirectory() as tmp:

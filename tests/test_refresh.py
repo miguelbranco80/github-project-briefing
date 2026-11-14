@@ -30,6 +30,21 @@ class RefreshTests(unittest.TestCase):
             for state,budget in [('../escape',100),('data/x',0),('data/x',True)]:
                 (root/'projects.json').write_text(json.dumps({'projects':[{'repo':'org/repo','state_dir':state,'max_prs':budget}]}))
                 self.assertEqual(r.run(root,execute=lambda *a,**k:self.fail('invalid config collected'))['status'],'blocked')
+    def test_filter_validation_and_forwarding(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "projects.json"
+            row = {"repo": "org/repo", "state_dir": "data/repo", "pr_filter": ["not a query"]}
+            path.write_text(json.dumps({"projects": [row]}))
+            self.assertEqual(r.run(root, execute=lambda *a, **k: self.fail("invalid filter collected"))["status"], "blocked")
+            row["pr_filter"] = "-label:docs"
+            path.write_text(json.dumps({"projects": [row]}))
+            def execute(cmd, **kwargs):
+                self.assertIn("--pr-filter=-label:docs", cmd)
+                return subprocess.CompletedProcess(cmd, 0, '{"status":"complete"}')
+            self.assertEqual(r.run(root, execute)["projects"][0]["status"], "complete")
+            self.assertEqual(json.loads(path.read_text())["projects"][0], row)
+
     def test_one_failure_does_not_block_other_repo_and_recovery_is_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)

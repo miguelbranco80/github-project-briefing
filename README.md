@@ -20,7 +20,9 @@ openclaw templates add .
 Add creates an independent agent and one daily job at 09:00 UTC; adding again is
 not an upgrade. Open the new agent's chat and send **Get started** if onboarding
 does not start automatically. The agent asks which repository to follow and
-checks tools, collection scope and daily delivery.
+checks tools, collection scope and daily delivery. Before expensive collection,
+it scouts project activity and tries a small sample. For busy repositories it
+helps you choose a useful focus and remembers the working research approach.
 
 For a first-run check, ask: **Refresh now, build the journal without decorative
 artwork, show the article and report collection, presentation and daily-delivery
@@ -42,8 +44,8 @@ npm ci --prefix skills/project-briefing/journal --ignore-scripts --no-audit --no
 python3 -m unittest discover -s tests -v
 openclaw templates validate .
 openclaw templates dev .
-openclaw templates build . --out dist/project-briefing-0.2.4.tgz
-python3 tests/check_archive.py dist/project-briefing-0.2.4.tgz
+openclaw templates build . --out dist/project-briefing-0.2.5.tgz
+python3 tests/check_archive.py dist/project-briefing-0.2.5.tgz
 ~~~
 
 The tests use disposable workspaces and fake GitHub responses. They exercise
@@ -53,10 +55,10 @@ or credentials enter the package.
 
 ## Verification and known limits
 
-Version 0.2.4 passed 38 tests in the source checkout and against the extracted
+Version 0.2.5 passed 47 tests in the source checkout and against the extracted
 release archive, including a cold locked dependency install. Template validation
-and install preview passed. These checks cover collection limits and recovery,
-text-only publication, optional assets, draft rejection, archive preservation,
+and install preview passed. These checks cover filtered/broad collection, scope changes, old-database
+compatibility, limits and recovery, text-only publication, optional assets, draft rejection, archive preservation,
 local links and package resources; they do not certify editorial quality.
 
 A live scheduled run collected evidence and built a text-only article, but
@@ -78,9 +80,9 @@ before retrying; do not stop the Gateway just to repeat the same failing command
   readiness explanation and handoff. skills/project-briefing/SKILL.md owns shared
   configuration rules, ongoing operation and targeted recovery; it does not
   repeat onboarding on ordinary or scheduled runs.
-- scripts/collect.py owns first-scan workload estimates, bounded collection and
-  reporting records; refresh.py
-  owns configuration checks, independent refreshes and blocker deduplication.
+- scripts/collect.py owns workload estimates, optional PR search filtering,
+  bounded collection and reporting records; refresh.py owns configuration checks,
+  independent refreshes and blocker deduplication.
 - scripts/journal.py binds articles to completed runs, initializes each project's
   blog, builds it and records outputs. The journal directory supplies the portable
   site engine, post template, editorial rules and optional one-off artwork guide.
@@ -103,8 +105,10 @@ Quiet polls do not create filler posts. Diagrams are optional and must be ground
 in inspected code or design sources. Portals serve previews; public hosting is
 not configured.
 
-Collection covers recent PR metadata/discussions, commits and releases within
-explicit budgets. It is not a full source archive, CI monitor, issue tracker or
+Broad collection covers recent PR metadata/discussions, commits and releases
+within explicit budgets. An optional saved pr_filter restricts collection to
+matching PRs and their discussions, excluding repository-wide commits/releases.
+It is not a full source archive, CI monitor, issue tracker or
 deployment qualification. See [DATA.md](skills/project-briefing/DATA.md) for details.
 
 Portable-source updates do not automatically upgrade an already installed agent

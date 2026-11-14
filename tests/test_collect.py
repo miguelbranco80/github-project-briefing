@@ -181,6 +181,108 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual(records[0][2]["pr"]["state"],"closed")
         self.assertTrue(any("/issues/1/comments" in url for url in called))
 
+
+    def test_filtered_collection_does_not_fetch_unrelated_streams_or_tracked_prs(self):
+        pr = {"number": 7, "state": "open", "updated_at": "2026-11-11T00:00:00Z",
+              "head": {"sha": "a"}, "title": "Fix sessions",
+              "html_url": "https://github.com/org/repo/pull/7", "user": {"login": "dev"}}
+        c.refresh(self.db, "org/repo", collector=lambda *a: [
+            ("pr", "1", {"pr": dict(pr, number=1)})])
+        calls = []
+        def fetch(url):
+            calls.append(url)
+            if url.startswith("search/issues?"):
+                query = c.urllib.parse.parse_qs(c.urllib.parse.urlsplit(url).query)["q"][0]
+                self.assertEqual(query, 'repo:org/repo is:pr updated:>=2026-11-10 label:"agent runtime"')
+                return {"total_count": 1, "incomplete_results": False, "items": [{"number": 7}]}
+            if url == "repos/org/repo/pulls/7": return pr
+            if "/issues/7/comments?" in url or "/pulls/7/reviews?" in url: return []
+            self.fail(f"Unexpected out-of-scope read: {url}")
+        records = c.collect(self.db, "org/repo", "2026-11-10", "2026-11-12",
+                            reconcile=True, fetch=fetch, pr_filter='label:"agent runtime"')
+        self.assertEqual([(kind, key) for kind, key, _ in records], [("pr", "7")])
+        c.refresh(self.db, "org/repo", collector=lambda *a: records, pr_filter='label:"agent runtime"')
+        report = c.render(self.db, 2)
+        self.assertIn('PR-only coverage', report)
+        self.assertIn('label:"agent runtime"', report)
+        self.assertIn("commits and releases are NOT collected", report)
+        calls.clear()
+        self.assertEqual(c.collect(self.db, "org/repo", "2026-11-10", "2026-11-12",
+                                   fetch=fetch, pr_filter='label:"agent runtime"'), records)
+        self.assertEqual(len(calls), 2)  # Search + PR metadata; unchanged discussions reused.
+
+    def test_search_paginates_and_stops_at_exact_thousand_without_page_eleven(self):
+        for total in (101, 1000):
+            calls = []
+            def fetch(url):
+                calls.append(url)
+                start = (int(c.urllib.parse.parse_qs(c.urllib.parse.urlsplit(url).query)["page"][0]) - 1) * 100
+                return {"total_count": total, "incomplete_results": False,
+                        "items": [{"number": n} for n in range(start, min(start + 100, total))]}
+            result = c.pages("search/issues?q=test", fetch=fetch, max_items=1000, search=True)
+            self.assertEqual(len(result), total)
+            self.assertEqual(len(calls), (total + 99) // 100)
+
+    def test_unsafe_search_results_stop_before_any_conversation_read(self):
+        for result in (
+            {"total_count": 1, "incomplete_results": True, "items": []},
+            {"total_count": 3, "incomplete_results": False, "items": []},
+            {"total_count": 2, "incomplete_results": False, "items": [{"number": 1}]},
+            {"total_count": 1, "incomplete_results": False,
+             "items": [{"number": n} for n in range(3)]},
+        ):
+            calls = []
+            def fetch(url):
+                calls.append(url)
+                return result
+            with self.assertRaises(RuntimeError):
+                c.collect(self.db, "org/repo", "2026-11-10", "2026-11-12",
+                          fetch=fetch, max_prs=2, pr_filter="label:security")
+            self.assertEqual(len(calls), 1)
+            self.assertTrue(calls[0].startswith("search/issues?"))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM objects").fetchone()[0], 0)
+
+    def test_changed_or_removed_filter_rebaselines_and_preserves_history(self):
+        previous = None
+        for pr_filter in ("", "label:security", "label:security", ""):
+            observed = []
+            def collector(db, repo, since, until, reconcile):
+                observed.append(since)
+                return []
+            run, _ = c.refresh(self.db, "org/repo", days=7, collector=collector, pr_filter=pr_filter)
+            since = c.dt.datetime.fromisoformat(observed[0].replace("Z", "+00:00"))
+            if previous and previous[1] == pr_filter:
+                self.assertEqual(since, previous[0] - c.dt.timedelta(hours=24))
+            else:
+                age = c.dt.datetime.now(c.dt.timezone.utc) - since
+                self.assertAlmostEqual(age.total_seconds() / 86400, 7, places=2)
+            started, saved_filter = self.db.execute("SELECT started,pr_filter FROM runs WHERE id=?", (run,)).fetchone()
+            self.assertEqual(saved_filter, pr_filter)
+            previous = (c.dt.datetime.fromisoformat(started.replace("Z", "+00:00")), pr_filter)
+        self.assertIn("default-branch commits in the window", c.render(self.db, 1))
+        self.assertIn("label:security", c.render(self.db, 2))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM runs").fetchone()[0], 4)
+
+    def test_legacy_runs_gain_empty_filter_without_losing_checkpoint(self):
+        path = Path(self.tmp.name) / "legacy.sqlite"
+        old = c.sqlite3.connect(path)
+        old.execute("CREATE TABLE runs(id INTEGER PRIMARY KEY,repo TEXT,started TEXT,finished TEXT,status TEXT,since TEXT,error TEXT)")
+        old.execute("INSERT INTO runs VALUES(1,'org/repo','2026-11-01','2026-11-01','complete','2026-10-25',NULL)")
+        old.commit()
+        old.close()
+        db = c.connect(path)
+        self.assertEqual(db.execute("SELECT started,pr_filter FROM runs").fetchone(), ("2026-11-01", ""))
+        db.close()
+
+    def test_filter_cannot_override_repository_type_or_window(self):
+        for value in ('repo:other/repo', 'org:other', 'user:other', 'is:issue',
+                      'type:issue', 'updated:>2020-01-01', 'label:bug OR repo:other/repo'):
+            with self.assertRaisesRegex(ValueError, "pr_filter accepts"):
+                c.pr_query("org/repo", "2026-11-10", value)
+        self.assertEqual(c.pr_query("org/repo", "2026-11-10", '"session resume" in:title,body -label:docs'),
+                         'repo:org/repo is:pr updated:>=2026-11-10 "session resume" in:title,body -label:docs')
+
+
 if __name__ == "__main__":
     unittest.main()
 

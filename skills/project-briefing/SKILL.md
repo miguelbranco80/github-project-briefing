@@ -48,7 +48,44 @@ The commands below run from this skill's directory. WORKSPACE is the installed
 agent workspace, STATE the configured project state directory, and RUN a
 completed collection run ID.
 
-## 2. Refresh
+## 2. Research scope and refresh
+
+Before a new repository's full scan, or when the saved approach stops working,
+inspect recent activity, actual labels and project structure with read-only gh
+queries and the count-only
+estimate below. Choose a research style that fits the activity: broad coverage
+may suit a quiet project; a busy one needs focused discovery and selective deep
+reading. Help the user choose useful interests, not query syntax or arbitrary
+limits. Offer an area focus or a broad editorial selection, try a small query
+sample, and explain its relevance, volume and exclusions before saving it.
+
+Use optional projects.json pr_filter for GitHub PR search terms, for example
+`label:security` or `"session resume" in:title,body`. It narrows actual collection,
+not just writing priorities. Test the query with gh first, then count it:
+
+```sh
+python3 scripts/collect.py --repo OWNER/REPO --state-dir STATE --estimate --pr-filter 'label:security'
+```
+
+The collector supplies repository, PR type and update window; do not put
+repo/org/user/is/type/updated qualifiers or OR in pr_filter. An empty filter keeps
+the existing broad collection. A nonempty filter collects matching PRs only,
+not repository-wide commits/releases, with GitHub's 1,000-match search ceiling.
+PR search cannot match changed-file paths: inspect relevant file lists when
+needed and do not present keyword/label matches as complete path coverage.
+For broad editorial selection on a huge project, agree a manageable set of themes
+rather than claiming exhaustive coverage. Fetch additional code or discussions
+only where they support a candidate story.
+
+Keep a short STATE/research.md note with the agreed interests, working query,
+observed activity, useful components, exclusions and what worked or hit limits.
+Read it before each run; use it and prior articles instead of rediscovering the
+project. Refine queries within the agreed focus and test relevance when volume
+or results change; ask before changing the focus or raising budgets. A changed
+filter starts a fresh baseline over configured days, preserving old evidence.
+Do not repeat a known oversized scan unchanged: try a narrower query within the
+agreed focus, or explain the needed scope decision. Scheduled runs retain that
+blocker without starting an onboarding dialogue.
 
 ```sh
 python3 scripts/refresh.py --workspace WORKSPACE
@@ -63,16 +100,18 @@ and 1,000 records per other evidence stream. Before the first scan, the collecto
 checks GitHub PR counts. If over budget or incomplete, it returns needs_scope
 without reading conversations or creating a run/checkpoint. Present its counted
 options in one question: retain the requested window with a sufficient limit,
-or shorten it (normally three days or one day). Show both days and limit for each
-option; a shorter window can still require a higher limit. Recommend a choice
-based on the user's priorities; do not guess successive higher limits.
+or shorten it (normally three days or one day), and offer a tested area filter
+when broad coverage is impractical. Show days and limit for each counted option;
+a shorter window can still require a higher limit. Recommend based on the user's
+interests and relevance of the sampled results; do not guess successive limits.
 
 Counts are indexed estimates, not runtime promises. Do not treat incomplete
 counts as complete. Live discovery still fails on overflow without advancing
-the checkpoint; use collect.py --estimate with the configured days/max-prs to
+the checkpoint; use collect.py --estimate with configured days/max-prs/pr-filter to
 refresh the options before another scope question. Never silently shorten the
 window or increase budgets; save explicit user-approved changes in projects.json.
-days changes only the initial scan. Scheduled runs report a new scope blocker
+days changes only a baseline (initial scan or changed filter), not an ongoing
+checkpoint window. Scheduled runs report a new scope blocker
 without starting an onboarding dialogue. Use collect.py --reconcile for stale caches.
 
 ## 3. Investigate

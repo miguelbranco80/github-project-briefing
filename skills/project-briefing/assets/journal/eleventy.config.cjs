@@ -76,20 +76,5 @@ module.exports = function (eleventyConfig) {
   eleventyConfig.addFilter("olderPosts", function (posts) {
     return posts.slice(0, -1).reverse();
   });
-  eleventyConfig.addFilter("byMonth", function (posts) {
-    const groups = [];
-    for (const post of posts.slice().reverse()) {
-      const label = new Intl.DateTimeFormat("en-GB", {
-        month: "long", year: "numeric", timeZone: "UTC"
-      }).format(post.date);
-      let group = groups.at(-1);
-      if (!group || group.label !== label) {
-        group = { label: label, posts: [] };
-        groups.push(group);
-      }
-      group.posts.push(post);
-    }
-    return groups;
-  });
   return { markdownTemplateEngine: "njk", dir: { input: "src", output: "_site", includes: "_includes", data: "_data" } };
 };

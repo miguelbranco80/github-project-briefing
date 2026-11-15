@@ -94,7 +94,7 @@ class JournalTests(unittest.TestCase):
         self.assertEqual(site["repository"], "https://github.com/example/widgets")
         self.assertEqual(len(list(article.parent.glob("*.md"))), 1)
 
-    def test_two_posts_archive_and_review_survive_retry(self):
+    def test_two_posts_and_review_survive_retry(self):
         first = self.author(artwork=True)
         built = self.command("publish")
         self.assertEqual(built["status"], "built")
@@ -114,22 +114,22 @@ class JournalTests(unittest.TestCase):
         self.author(2)
         second = self.command("publish", 2)
         site = Path(second["site_dir"]) / "_site"
-        homepage, archive = (site / "index.html").read_text(), (site / "archive/index.html").read_text()
+        homepage = (site / "index.html").read_text()
         featured = homepage.split('class="featured-story text-only"', 1)[1].split("</section>", 1)[0]
         self.assertNotIn("<img", featured)
         self.assertIn("run-1.svg", homepage)
         second_html = (site / second["post_url"].lstrip("/") / "index.html").read_text()
         self.assertNotIn('class="article-cover"', second_html)
-        self.assertNotIn('src=""', homepage + archive + second_html)
+        self.assertNotIn('src=""', homepage + second_html)
         self.assertIn("Engineering update 2", featured)
         with urlopen(url, timeout=5) as response:
             self.assertEqual(response.read().decode(), homepage)
-        for route in ("archive/index.html", built["post_url"].lstrip("/") + "index.html",
+        for route in (built["post_url"].lstrip("/") + "index.html",
                       "assets/illustrations/run-1.svg"):
             with urlopen(url + route, timeout=5) as response:
                 self.assertEqual(response.read(), (site / route).read_bytes())
         for entry in (built, second):
-            self.assertIn(".." + entry["post_url"] + "index.html", archive)
+            self.assertIn(entry["post_url"].lstrip("/") + "index.html", homepage)
             self.assertTrue((site / entry["post_url"].lstrip("/") / "index.html").is_file())
             self.assertEqual(Path(entry["html"]), site / entry["post_url"].lstrip("/") / "index.html")
         stylesheet = (Path(second["site_dir"]) / "src/assets/style.css").read_text()
@@ -164,9 +164,8 @@ class JournalTests(unittest.TestCase):
         built = self.command("publish")
         html = (Path(built["output_dir"]) / built["post_url"].lstrip("/") / "index.html").read_text()
         self.assertIn(snippet, html)
-        about = (Path(built["output_dir"]) / "about/index.html").read_text()
-        self.assertIn("https://github.com/example/widgets", about)
-        self.assertNotIn("{{ site.repository }}", about)
+        self.assertIn("https://github.com/example/widgets", html)
+        self.assertNotIn("{{ site.repository }}", html)
         self.assertFalse((site / "node_modules").exists())
 
     def test_same_day_articles_sort_by_run(self):
@@ -178,10 +177,9 @@ class JournalTests(unittest.TestCase):
             self.author(run)
             built = self.command("publish", run)
         homepage = (Path(built["output_dir"]) / "index.html").read_text()
-        featured = homepage.split('id="latest-title"', 1)[1].split("</h2>", 1)[0]
+        featured = homepage.split('id="latest-title"', 1)[1].split("</h1>", 1)[0]
         self.assertIn("Engineering update 10", featured)
-        archive = (Path(built["output_dir"]) / "archive/index.html").read_text()
-        self.assertLess(archive.index("Engineering update 10"), archive.index("Engineering update 9"))
+        self.assertLess(homepage.index("Engineering update 10"), homepage.index("Engineering update 9"))
 
     def test_skip_saves_reason_without_files_and_retry_preserves_it(self):
         command = ["python3", str(SCRIPT), "skip", "--workspace", str(self.workspace),
@@ -251,7 +249,7 @@ class JournalTests(unittest.TestCase):
         self.assertFalse((Path(draft["site_dir"]) / "image-prompts.json").exists())
         built = self.command("publish")
         output = Path(built["output_dir"])
-        for page in (output / "index.html", output / "archive/index.html",
+        for page in (output / "index.html",
                      output / built["post_url"].lstrip("/") / "index.html"):
             self.assertNotIn("<img", page.read_text())
         self.assertFalse(any((output / "assets/illustrations").glob("*")))
@@ -282,7 +280,7 @@ class JournalTests(unittest.TestCase):
         self.assertEqual(self.command("publish")["status"], "built")
         self.assertEqual(Path(pending["article"]).read_bytes(), draft_bytes)
         site = Path(first["output_dir"])
-        self.assertNotIn("run-2", (site / "archive/index.html").read_text())
+        self.assertNotIn("run-2", (site / "index.html").read_text())
         self.assertFalse((site / "drafts").exists())
 
     def test_reject_unconfigured_repository_and_failed_run(self):

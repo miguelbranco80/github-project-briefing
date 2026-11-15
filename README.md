@@ -23,7 +23,7 @@ are optional.
 1. Check workload, agree scope and collect evidence into the project's `activity.sqlite`.
 2. Review unreviewed collections and research the changes that matter.
 3. Write an article in `journal/src/posts/`, or record why none is needed in SQLite.
-4. Build the static blog; its portal serves the homepage, archive and articles.
+4. Build the static blog; its portal serves the post list and articles.
 
 Collection and review bookkeeping stays in SQLite; articles stay in Markdown.
 

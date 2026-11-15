@@ -37,15 +37,22 @@ check dates and earlier coverage before treating something as news.
 
 ## Write
 
-Explain the problem, mechanism, trade-off and practical consequence in connected
-prose. Use a specific headline and concrete examples. Link inspected evidence next
-to the claims it supports. Distinguish proposed work, accepted designs, merged
-implementations and verified deployments; attribute opinions and reported tests.
+Write an engineering newsletter for someone who follows the project.
+Lead with a concrete headline and a short opening explaining the most
+important news.
 
-Before publishing, check that the reader can understand what changed and why it
-matters. Remove unsupported claims and activity inventories. State the observation
-window and material gaps, including limited sampling. Diagrams are useful when
-inspected code or designs support a relationship that is easier to show.
+Group related changes into stories with descriptive headings. Explain
+what changed, how it works and why it matters. Use short paragraphs,
+plain language and concrete examples. Link supporting code or discussion
+beside the relevant claim.
+
+State each story’s status once. Include limitations when they affect
+how someone would use or adopt the change. Keep general research and
+verification limits in a brief closing coverage note.
+
+Let the news determine the length; a follow-up may need only one story.
+Before publishing, cut repeated caveats, abstract framing and details
+that do not help the reader understand the change.
 
 ## Finish
 

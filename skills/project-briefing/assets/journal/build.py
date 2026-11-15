@@ -32,9 +32,8 @@ class Page(HTMLParser):
 def check_site(root):
     root = root.resolve()
     pages = {p.resolve(): Page(p.read_text()) for p in root.rglob("*.html")}
-    for required in ("index.html", "archive/index.html"):
-        if root / required not in pages:
-            raise ValueError(f"missing required page: {required}")
+    if root / "index.html" not in pages:
+        raise ValueError("missing required page: index.html")
     checked = 0
     for page, parsed in pages.items():
         for link in parsed.links:

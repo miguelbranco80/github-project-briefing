@@ -12,21 +12,16 @@
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <div class="page-shell">
-    <div class="topline"><span>Independent engineering journal</span><span>{{ site.repositoryName }}</span></div>
     <header class="site-header">
-      <a class="wordmark" href="/" aria-label="{{ site.name }} home"><strong>Project<span class="wordmark-dot">.</span></strong><span>fieldnotes</span></a>
+      <a class="wordmark" href="/" aria-label="{{ site.name }} home">{{ site.name }}</a>
       <nav aria-label="Main navigation">
-        <a href="/" {% if page.url == "/" %}aria-current="page"{% endif %}>Journal</a>
-        <a href="/archive/" {% if page.url == "/archive/" %}aria-current="page"{% endif %}>Archive</a>
-        <a href="/about/" {% if page.url == "/about/" %}aria-current="page"{% endif %}>About</a>
-        <a class="source-link" href="{{ site.repository }}" target="_blank" rel="noopener noreferrer">Source ↗</a>
+        <a href="/" {% if page.url == "/" %}aria-current="page"{% endif %}>Blog</a>
+        <a class="source-link" href="{{ site.repository }}" target="_blank" rel="noopener noreferrer">Repository ↗</a>
       </nav>
     </header>
     <main id="main">{{ content | safe }}</main>
     <footer class="site-footer">
-      <a class="footer-wordmark" href="/">Project <em>fieldnotes</em></a>
-      <p>Engineering updates with linked primary sources.</p>
-      <div class="footer-links"><a href="/archive/">All entries</a><a href="/about/">Sources &amp; method</a></div>
+      <a class="footer-wordmark" href="/">{{ site.name }}</a>
     </footer>
   </div>
 </body>

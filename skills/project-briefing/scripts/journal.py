@@ -34,7 +34,7 @@ def initialize(site, repo):
         (staged / "src/assets/illustrations").mkdir(exist_ok=True)
         (staged / "drafts").mkdir()
         (staged / "src/_data/site.json").write_text(json.dumps({
-            "name": f"{repo} fieldnotes",
+            "name": repo,
             "description": f"Engineering updates for {repo}.",
             "repositoryName": repo, "repository": f"https://github.com/{repo}",
         }, indent=2) + "\n")

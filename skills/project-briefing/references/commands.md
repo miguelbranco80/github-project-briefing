@@ -50,6 +50,8 @@ Edit the returned `article`: fill its title and description and write the Markdo
 body. Keep the other metadata, which identifies the collected evidence. Diagrams
 and requested artwork go under the journal's `src/assets/`; link diagram sources
 and supply alt text. Optional covers use `cover`, `coverAlt` and `coverCaption`.
+On the first article, set `name` in the journal's `src/_data/site.json` to the
+project's name; subsequent builds reuse it.
 
 ```sh
 python3 scripts/journal.py publish --workspace WORKSPACE --repo OWNER/REPO --run RUN
@@ -79,8 +81,8 @@ python3 -u -m http.server 0 --bind 127.0.0.1 --directory OUTPUT_DIR
 Port `0` binds a free port chosen by the OS. Read the actual port from the process
 output and verify the blog responds. Reuse its entry in `portal list`, or open
 one with `portal` using that port and the repository as its title. Present the
-returned URL unchanged through the available portal view; verify the homepage,
-an article and archive navigation from the reader's browser.
+returned URL unchanged through the available portal view; verify navigation between
+the blog and an article from the reader's browser.
 
 Serve only `_site/`. Keep the process managed by `exec`/`process`. Rebuilds update
 the same site; reload the page to read them. When reopening, check the server and

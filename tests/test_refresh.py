@@ -147,10 +147,10 @@ class RefreshTests(unittest.TestCase):
             self.assertEqual(first[0].read_bytes(), first[1])
             state = Path(result["state_dir"])
             self.assertEqual(list(state.glob("*.md")), [])
-            archive = (state / "journal/_site/archive/index.html").read_text()
-            self.assertIn("Cancellation update 1", archive)
-            self.assertIn("Cancellation update 2", archive)
-            self.assertNotIn("Cancellation update 3", archive)
+            blog = (state / "journal/_site/index.html").read_text()
+            self.assertIn("Cancellation update 1", blog)
+            self.assertIn("Cancellation update 2", blog)
+            self.assertNotIn("Cancellation update 3", blog)
             self.assertEqual(invoke("collect.py", "--repo", "org/a", "--state-dir", str(state),
                                     "--pending")["pending_runs"], [])
             with sqlite3.connect(state / "activity.sqlite") as db:

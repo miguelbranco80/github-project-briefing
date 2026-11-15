@@ -20,10 +20,6 @@ workspace:
       path: skills/project-briefing/assets/journal/src/_includes/base.njk
     - source: skills/project-briefing/assets/journal/src/_includes/post.njk
       path: skills/project-briefing/assets/journal/src/_includes/post.njk
-    - source: skills/project-briefing/assets/journal/src/about.md
-      path: skills/project-briefing/assets/journal/src/about.md
-    - source: skills/project-briefing/assets/journal/src/archive.njk
-      path: skills/project-briefing/assets/journal/src/archive.njk
     - source: skills/project-briefing/assets/journal/src/assets/favicon.svg
       path: skills/project-briefing/assets/journal/src/assets/favicon.svg
     - source: skills/project-briefing/assets/journal/src/assets/style.css

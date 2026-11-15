@@ -47,7 +47,7 @@ data/owner--repo/
     drafts/            Markdown articles being written
     src/posts/         published Markdown articles
     src/assets/        styles and artwork
-    _site/             static blog and self-contained reader.html
+    _site/             generated static blog
 ```
 
 SQLite is a local file; it needs no database server. Its `runs` table records each
@@ -66,9 +66,9 @@ Keep background knowledge in the journal; do not copy these settings into resear
 ## Daily job
 
 The template installs a disabled daily job at 09:00 UTC in this agent's main
-session. After setup, keep its prompt and bind it to the session owning the journal,
-record the working model and account, and allow `show_widget` alongside the
-research tools. Enable it and tell the reader its schedule. Check the run history
+session. After setup, keep its prompt and bind it to the journal’s session,
+record the working model and account, and allow the research tools. Enable it and
+tell the reader its schedule. Check the run history
 for authentication or execution failures before claiming scheduled updates work.
 
 The job maintains the journal with notification delivery off. Configure a
@@ -77,4 +77,4 @@ notification destination only when the reader asks for notifications.
 ## Runtime requirements
 
 The execution environment needs Python 3.10+ on POSIX, Node.js 20.19+, authenticated
-`gh`. Report a missing capability specifically.
+`gh` and OpenClaw portal access. Report a missing capability specifically.

@@ -56,8 +56,8 @@ python3 scripts/journal.py publish --workspace WORKSPACE --repo OWNER/REPO --run
 ```
 
 Publication builds the project's static site, saves the article path in SQLite
-and returns the article’s `html` path, the journal’s `output_dir` and its
-self-contained `reader` path. When nothing merits an article, instead run:
+and returns the article’s `html` path and the journal’s `output_dir`.
+When nothing merits an article, instead run:
 
 ```sh
 python3 scripts/journal.py skip --workspace WORKSPACE --repo OWNER/REPO --run RUN --reason 'Only routine dependency updates; no relevant behavior change.'
@@ -68,15 +68,24 @@ removes the run from `pending_runs`; retrying returns the saved decision.
 
 ## Present the journal
 
-Pass the complete contents of the returned `reader` file unchanged to
-`show_widget` as `widget_code`, with `pin: true`, `size: "full"`, the repository
-as `title`, and a lowercase `journal-OWNER--REPO` name (at most 64 characters).
-Use the same name and session for later updates. Forward file contents through
-Code Mode when available instead of copying the HTML through the model.
+Reuse the background server for this project's absolute `OUTPUT_DIR`; check its
+process and HTTP response. If none is running, start this through OpenClaw's
+`exec` with `background: true` and `timeoutSeconds: 0` in the journal’s environment:
 
-The reader includes the existing pages, styles and artwork; archive navigation
-stays inside the widget. Create it only after an article exists. The static blog
-in `OUTPUT_DIR/index.html` remains available for ordinary browsers.
+```sh
+python3 -u -m http.server 0 --bind 127.0.0.1 --directory OUTPUT_DIR
+```
+
+Port `0` binds a free port chosen by the OS. Read the actual port from the process
+output and verify the blog responds. Reuse its entry in `portal list`, or open
+one with `portal` using that port and the repository as its title. Present the
+returned URL unchanged through the available portal view; verify the homepage,
+an article and archive navigation from the reader's browser.
+
+Serve only `_site/`. Keep the process managed by `exec`/`process`. Rebuilds update
+the same site; reload the page to read them. When reopening, check the server and
+portal again: portals end at Gateway restart. A loopback-only portal works only
+on the Gateway host; remote readers need configured portal ingress.
 
 ## Recovery
 
@@ -90,5 +99,5 @@ python3 scripts/collect.py --repo OWNER/REPO --state-dir STATE --pending
 
 For a dated correction or requested layout change, edit the existing journal and
 rebuild with `python3 assets/journal/build.py STATE/journal`. This preserves article
-URLs. Present the rebuilt reader to update the dashboard. Inspect the scheduler's
+URLs; the running server serves the rebuilt files. Inspect the scheduler's
 history for failed runs before retrying.

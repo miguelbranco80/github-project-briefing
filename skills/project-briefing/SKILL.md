@@ -49,8 +49,8 @@ inspected code or designs support a relationship that is easier to show.
 
 ## Finish
 
-Follow [Publish or skip](references/commands.md#publish-or-skip). After publication,
-[update the journal view](references/commands.md#present-the-journal). Introduce
+Follow [Publish or skip](references/commands.md#publish-or-skip). In interactive
+runs, [open the journal](references/commands.md#present-the-journal) and introduce
 the new article briefly, or explain during setup if nothing merits publication.
 Keep previous articles and artwork; add dated corrections when needed.
 Scheduled runs return a brief announcement when a new article is published and

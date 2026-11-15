@@ -10,8 +10,6 @@ workspace:
       path: skills/project-briefing/SKILL.md
     - source: skills/project-briefing/assets/journal/build.py
       path: skills/project-briefing/assets/journal/build.py
-    - source: skills/project-briefing/assets/journal/reader.cjs
-      path: skills/project-briefing/assets/journal/reader.cjs
     - source: skills/project-briefing/assets/journal/eleventy.config.cjs
       path: skills/project-briefing/assets/journal/eleventy.config.cjs
     - source: skills/project-briefing/assets/journal/package-lock.json

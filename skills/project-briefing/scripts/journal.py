@@ -64,7 +64,6 @@ def journal(workspace, repo, run, action, reason=None):
                 article = Path(article_path) if article_path else None
                 if article is not None and article.parent == site / "src/posts":
                     result.update(site_dir=str(site), output_dir=str(site / "_site"),
-                                  reader=str(site / "_site/reader.html"),
                                   html=str(site / "_site/posts" / article.stem / "index.html"),
                                   post_url=f"/posts/{article.stem}/")
                 return result
@@ -82,7 +81,6 @@ def journal(workspace, repo, run, action, reason=None):
             result = {
                 "status": "draft", "site_dir": str(site), "article": str(article),
                 "output_dir": str(site / "_site"),
-                "reader": str(site / "_site/reader.html"),
                 "html": str(site / "_site/posts" / article.stem / "index.html"),
                 "post_url": f"/posts/{article.stem}/",
             }

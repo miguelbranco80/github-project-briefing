@@ -6,10 +6,13 @@ import json
 import os
 from pathlib import Path
 import re
+import select
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import unittest
+from urllib.request import urlopen
 
 
 ROOT = Path(os.environ.get("PROJECT_BRIEFING_TEST_PACKAGE", Path(__file__).resolve().parents[1])).resolve()
@@ -95,6 +98,16 @@ class JournalTests(unittest.TestCase):
         first = self.author(artwork=True)
         built = self.command("publish")
         self.assertEqual(built["status"], "built")
+        server = subprocess.Popen([sys.executable, "-u", "-m", "http.server", "0",
+                                   "--bind", "127.0.0.1", "--directory", built["output_dir"]],
+                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        self.addCleanup(server.stdout.close)
+        self.addCleanup(server.wait, timeout=5)
+        self.addCleanup(server.terminate)
+        self.assertTrue(select.select([server.stdout], [], [], 5)[0], "Server did not start")
+        url = re.search(r"\((http://[^)]+)\)", server.stdout.readline()).group(1)
+        with urlopen(url, timeout=5) as response:
+            self.assertIn("Engineering update 1", response.read().decode())
         article_hash = hashlib.sha256(Path(built["article"]).read_bytes()).hexdigest()
         art = Path(first["site_dir"]) / "src/assets/illustrations/run-1.svg"
         art_hash = hashlib.sha256(art.read_bytes()).hexdigest()
@@ -109,6 +122,12 @@ class JournalTests(unittest.TestCase):
         self.assertNotIn('class="article-cover"', second_html)
         self.assertNotIn('src=""', homepage + archive + second_html)
         self.assertIn("Engineering update 2", featured)
+        with urlopen(url, timeout=5) as response:
+            self.assertEqual(response.read().decode(), homepage)
+        for route in ("archive/index.html", built["post_url"].lstrip("/") + "index.html",
+                      "assets/illustrations/run-1.svg"):
+            with urlopen(url + route, timeout=5) as response:
+                self.assertEqual(response.read(), (site / route).read_bytes())
         for entry in (built, second):
             self.assertIn(".." + entry["post_url"] + "index.html", archive)
             self.assertTrue((site / entry["post_url"].lstrip("/") / "index.html").is_file())
@@ -120,14 +139,6 @@ class JournalTests(unittest.TestCase):
             self.assertIn("<style>" + stylesheet + "</style>", html)
             self.assertNotIn('rel="stylesheet"', html)
         self.assertIn('href="../../index.html"', second_html)
-        reader = Path(second["reader"]).read_text()
-        pages = json.loads(reader.split('<script type="application/json" id="journal-pages">', 1)[1].split('</script>', 1)[0])
-        for entry in (built, second):
-            route = entry["post_url"] + "index.html"
-            self.assertIn(route, pages)
-            self.assertIn('href="#' + route + '"', pages["/archive/index.html"]["html"])
-        self.assertIn('src="data:image/svg+xml;base64,', pages[built["post_url"] + "index.html"]["html"])
-        self.assertIn('href="#/index.html"', pages[second["post_url"] + "index.html"]["html"])
         self.assertEqual(hashlib.sha256(Path(built["article"]).read_bytes()).hexdigest(), article_hash)
         self.assertEqual(hashlib.sha256(art.read_bytes()).hexdigest(), art_hash)
         with sqlite3.connect(self.state / "activity.sqlite") as db:
@@ -137,7 +148,6 @@ class JournalTests(unittest.TestCase):
         self.assertEqual(retry["status"], "reviewed")
         self.assertEqual(retry["output_dir"], built["output_dir"])
         self.assertEqual(retry["post_url"], built["post_url"])
-        self.assertEqual(retry["reader"], second["reader"])
         self.assertEqual(snapshot(site), before)
 
     def test_code_examples_are_literal_even_in_existing_journals(self):

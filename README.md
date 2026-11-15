@@ -15,8 +15,9 @@ openclaw templates add .
 ```
 
 Name a repository and what interests you. The agent researches it, saves the first
-article and discusses the findings in chat. Setup enables a quiet daily job at
-09:00 UTC. Ask “what changed since we last talked?” to catch up on saved articles.
+article and discusses the findings in chat. Setup enables daily research at 09:00
+in the gateway host's timezone. New briefings appear in the same chat; ask follow-up
+questions there. Runs with no news stay quiet.
 
 ## How it works
 
@@ -45,22 +46,7 @@ python3 tests/check_archive.py dist/project-briefing.tgz
 ```
 
 Tests use fake GitHub responses and exercise SQLite history, review
-decisions, collection limits, saved articles and project isolation. Verify installation
-and scheduled updates in the target OpenClaw environment.
-
-The previous HTML blog implementation is preserved at tag `v0.2.6-blog`.
-
-## Release
-
-Build releases from a clean checkout. CI validates the template and tests the
-built archive on pushes and pull requests, using a pinned OpenClaw source revision.
-
-For the first ClawHub release, sign in as `miguelbranco80` and publish the verified
-archive with `clawhub package publish ./dist/project-briefing.tgz --family template --display-name "Project Briefing" --wait`.
-After publication, configure ClawHub trusted publishing for this repository's
-`release.yml`. For later releases,
-bump `package.json`'s version and manually run **Verify and release** on `main`
-with **Publish this version to ClawHub** enabled. Ordinary pushes never publish.
+decisions, collection limits, saved articles and project isolation.
 
 ## License
 

@@ -61,11 +61,14 @@ Keep background knowledge in the articles; do not copy these settings into resea
 
 ## Daily job
 
-The template installs a disabled daily job at 09:00 UTC in an isolated session,
-with delivery off. After setup, record the working model and account, allow the
-research tools, and enable the job. Tell the reader its schedule and that it saves
-articles for them to discuss in chat. Check run history for authentication or
-execution failures before claiming scheduled updates work.
+After the first briefing, create a daily automation from this conversation:
+09:00 in the gateway host's timezone, isolated execution, announce delivery,
+and “Run the scheduled project briefing using skills/project-briefing/SKILL.md.”
+Use the working model, runtime and account and allow the research tools. Leave external
+delivery coordinates unset so results return here. Reuse this conversation's
+briefing job if setup is repeated. Tell the reader the schedule and timezone.
+Check run history for execution and delivery failures before claiming scheduled
+updates work.
 
 ## Runtime requirements
 

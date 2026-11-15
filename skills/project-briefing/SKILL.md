@@ -62,9 +62,9 @@ that do not help the reader understand the change.
 ## Finish
 
 Follow [Save or skip](references/commands.md#save-or-skip) to record the review.
-In interactive runs, summarize the findings in chat and link the saved article.
+Summarize new findings and link the saved article. Scheduled runs return this
+summary for delivery to the setup chat; return `NO_REPLY` when there is no news.
 Keep earlier articles; add dated corrections when needed.
 
-Scheduled runs save articles quietly and return `NO_REPLY` on success. Record
-blockers in the run's response for later inspection; keep the agreed scope until
+Report blockers in the run's response; keep the agreed scope until
 the reader changes it. For failed commands, follow [Recovery](references/commands.md#recovery).

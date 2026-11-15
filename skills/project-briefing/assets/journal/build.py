@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Build and check the static journal before replacing the last good preview."""
+import argparse
 from html.parser import HTMLParser
 from pathlib import Path
 import subprocess
@@ -54,16 +55,17 @@ def check_site(root):
     return len(pages), checked
 
 
-def build():
+def build(site):
+    site = site.resolve()
     command = ROOT / "node_modules/@11ty/eleventy/cmd.cjs"
     if not command.is_file():
         raise ValueError("Run npm ci before building the journal.")
-    with tempfile.TemporaryDirectory(prefix=".build-", dir=ROOT) as temporary:
+    with tempfile.TemporaryDirectory(prefix=".build-", dir=site) as temporary:
         temporary = Path(temporary)
         staged = temporary / "site"
-        subprocess.run(["node", str(command), f"--output={staged}"], cwd=ROOT, check=True, timeout=120)
+        subprocess.run(["node", str(command), f"--config={ROOT / 'eleventy.config.cjs'}", f"--output={staged}"], cwd=site, check=True, timeout=120)
         pages, links = check_site(staged)
-        output, previous = ROOT / "_site", temporary / "previous"
+        output, previous = site / "_site", temporary / "previous"
         if output.exists():
             output.rename(previous)
         try:
@@ -76,7 +78,9 @@ def build():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("site", type=Path)
     try:
-        build()
+        build(parser.parse_args().site)
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         raise SystemExit(f"Blog build failed; previous site retained: {error}") from error

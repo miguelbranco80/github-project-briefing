@@ -18,18 +18,21 @@ def projects(root):
         raise ValueError("projects must be an array")
     seen = set()
     states = set()
+    normalized = []
     for row in rows:
         repo = row["repo"]
-        state = (root / row["state_dir"]).resolve()
-        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+        if not isinstance(repo, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
             raise ValueError("Use owner/repository")
+        row = dict(row)
+        row.setdefault("state_dir", "data/" + repo.replace("/", "--"))
+        state = (root / row["state_dir"]).resolve()
         if not state.is_relative_to(root / "data") or state == root / "data":
             raise ValueError("state_dir must be a directory beneath workspace data/")
-        if repo.lower() in seen or state in states:
-            raise ValueError("Duplicate repository or state directory")
+        if repo.lower() in seen or any(state.is_relative_to(other) or other.is_relative_to(state) for other in states):
+            raise ValueError("Projects need distinct repositories and non-overlapping state directories")
         seen.add(repo.lower())
         states.add(state)
-        for field in ("days", "max_prs"):
+        for field in ("days", "max_prs", "max_commits"):
             value = row.get(field, 7 if field == "days" else 100)
             if type(value) is not int or value < 1:
                 raise ValueError(f"{field} must be a positive integer")
@@ -38,7 +41,8 @@ def projects(root):
                 raise ValueError(f"{field} must be an array of strings")
         if not isinstance(row.get("pr_filter", ""), str):
             raise ValueError("pr_filter must be a GitHub PR search string")
-    return rows
+        normalized.append(row)
+    return normalized
 
 def run(root, execute=subprocess.run):
     root = root.resolve()
@@ -74,7 +78,8 @@ def run(root, execute=subprocess.run):
         for row in rows:
             command = [sys.executable, str(Path(__file__).with_name("collect.py")),
                        "--repo", row["repo"], "--state-dir", str(root / row["state_dir"]),
-                       "--days", str(row.get("days", 7)), "--max-prs", str(row.get("max_prs", 100))]
+                       "--days", str(row.get("days", 7)), "--max-prs", str(row.get("max_prs", 100)),
+                       "--max-commits", str(row.get("max_commits", 100))]
             if row.get("pr_filter", "").strip():
                 command.append("--pr-filter=" + row["pr_filter"].strip())
             result = execute(command, capture_output=True, text=True)
@@ -84,9 +89,10 @@ def run(root, execute=subprocess.run):
                 payload = {"status": "failed", "error": "Collector did not complete; inspect local state and execution-host access"}
             error = payload.get("error", "Collection failed") if result.returncode else None
             health(row["repo"], error)
-            results.append({"repo": row["repo"], **payload})
+            results.append({"repo": row["repo"], "state_dir": str(root / row["state_dir"]), **payload})
         db.close()
-        return {"status": "complete" if rows else "unconfigured", "projects": results, "alerts": alerts}
+        status = "unconfigured" if not rows else "partial" if any(p.get("status") != "complete" for p in results) else "complete"
+        return {"status": status, "projects": results, "alerts": alerts}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)

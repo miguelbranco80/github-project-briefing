@@ -1,7 +1,30 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const posthtml = require("posthtml");
 
 module.exports = function (eleventyConfig) {
+  eleventyConfig.addTransform("relative-links", async function (content) {
+    if (!this.page.outputPath.endsWith(".html")) return content;
+    const current = this.page.url.endsWith("/") ? this.page.url + "index.html" : this.page.url;
+    return (await posthtml().use((tree) => tree.walk((node) => {
+      for (const key of ["href", "src"]) {
+        const ref = node.attrs?.[key];
+        if (!ref || /^(?:#|\/\/|[a-z][a-z0-9+.-]*:)/i.test(ref)) continue;
+        const url = new URL(ref, "https://journal.invalid" + current);
+        const target = url.pathname.endsWith("/") ? url.pathname + "index.html" : url.pathname;
+        node.attrs[key] = path.posix.relative(path.posix.dirname(current), target) + url.search + url.hash;
+      }
+      return node;
+    })).process(content)).html;
+  });
+  eleventyConfig.addPreprocessor("literal-articles", "md", function (data) {
+    if (data.tags?.includes("posts")) data.templateEngineOverride = "md";
+  });
+  eleventyConfig.addGlobalData("eleventyComputed", {
+    permalink: (data) => data.tags?.includes("posts")
+      ? `/posts/${path.basename(data.page.inputPath, ".md")}/index.html`
+      : data.permalink,
+  });
   eleventyConfig.addPassthroughCopy({ "src/assets": "assets" });
   eleventyConfig.addCollection("posts", function (collectionApi) {
     const posts = collectionApi.getFilteredByTag("posts");
@@ -18,17 +41,14 @@ module.exports = function (eleventyConfig) {
         throw new Error(`${post.inputPath}: missing or invalid date`);
       }
       if (data.cover != null) {
-        const cover = path.resolve(__dirname, "src", data.cover.slice(1));
-        const assets = path.resolve(__dirname, "src/assets") + path.sep;
+        const cover = path.resolve(process.cwd(), "src", data.cover.slice(1));
+        const assets = path.resolve(process.cwd(), "src/assets") + path.sep;
         if (!data.cover.startsWith("/assets/") || !cover.startsWith(assets) || !fs.existsSync(cover) || !fs.statSync(cover).isFile()) {
           throw new Error(`${post.inputPath}: cover must be a saved local asset`);
         }
       }
-      if (!Array.isArray(data.topics) || !data.topics.length || data.topics.some(topic => !topic.label || !topic.id)) {
-        throw new Error(`${post.inputPath}: topics need labels and heading ids`);
-      }
     }
-    return posts;
+    return posts.sort((a, b) => a.date - b.date || Number(a.data.run || a.data.issue || 0) - Number(b.data.run || b.data.issue || 0));
   });
   eleventyConfig.amendLibrary("md", function (md) {
     md.use(require("markdown-it-anchor"), {
@@ -67,5 +87,5 @@ module.exports = function (eleventyConfig) {
     }
     return groups;
   });
-  return { dir: { input: "src", output: "_site", includes: "_includes", data: "_data" } };
+  return { markdownTemplateEngine: "njk", dir: { input: "src", output: "_site", includes: "_includes", data: "_data" } };
 };

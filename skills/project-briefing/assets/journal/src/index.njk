@@ -19,7 +19,6 @@ description: Notes on code, pull requests and design decisions.
   </div>
   {% if latest.data.cover %}<a class="featured-image" href="{{ latest.url }}" tabindex="-1" aria-hidden="true"><img src="{{ latest.data.cover }}" alt="" width="1536" height="1024" fetchpriority="high"></a>{% endif %}
 </section>
-<div class="editorial-strip"><span class="small-label">Inside the latest entry</span><div>{% for topic in latest.data.topics %}<a href="{{ latest.url }}#{{ topic.id }}">{{ topic.label }} <span aria-hidden="true">↗</span></a>{% endfor %}</div></div>
 <section class="recent-section" aria-labelledby="earlier-title">
   <div class="section-heading"><h2 id="earlier-title">Earlier fieldnotes</h2><a href="/archive/">The archive ↗</a></div>
   {% for post in collections.posts | olderPosts %}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare and build a journal entry for an existing completed collection run."""
+"""Publish an article or record why a collected run needs none."""
 import argparse
 import fcntl
 import json
@@ -12,7 +12,7 @@ import tempfile
 import collect
 from refresh import projects
 
-ENGINE = Path(__file__).resolve().parents[1] / "journal"
+ENGINE = Path(__file__).resolve().parents[1] / "assets/journal"
 
 
 def article_metadata(repo, run, since, finished):
@@ -21,7 +21,6 @@ def article_metadata(repo, run, since, finished):
         "window": f"{since} → {finished} (UTC)",
         "title": "TODO: explain the engineering change",
         "description": "TODO: state the practical consequence",
-        "topics": [{"label": "First story", "id": "the-first-engineering-change"}],
     }
 
 
@@ -30,7 +29,7 @@ def initialize(site, repo):
         return
     with tempfile.TemporaryDirectory(prefix=".journal-init-", dir=site.parent) as temporary:
         staged = Path(temporary) / "site"
-        shutil.copytree(ENGINE, staged, ignore=shutil.ignore_patterns("node_modules", "_site", ".build-*", "__pycache__"))
+        shutil.copytree(ENGINE / "src", staged / "src", ignore=shutil.ignore_patterns(".DS_Store"))
         (staged / "src/_data").mkdir(exist_ok=True)
         (staged / "src/assets/illustrations").mkdir(exist_ok=True)
         (staged / "drafts").mkdir()
@@ -39,11 +38,10 @@ def initialize(site, repo):
             "description": f"Engineering updates for {repo}.",
             "repositoryName": repo, "repository": f"https://github.com/{repo}",
         }, indent=2) + "\n")
-        (staged / "image-prompts.json").write_text('{"images": []}\n')
         staged.rename(site)
 
 
-def journal(workspace, repo, run, action):
+def journal(workspace, repo, run, action, reason=None):
     workspace = workspace.resolve()
     row = next((p for p in projects(workspace) if p["repo"].lower() == repo.lower()), None)
     if row is None:
@@ -60,16 +58,20 @@ def journal(workspace, repo, run, action):
             if not evidence or not evidence[1]:
                 raise ValueError("Entry must reference a completed run for this repository")
             site = state / "journal"
-            existing = db.execute("SELECT briefing_path,delivery_status FROM run_outputs WHERE run_id=?", (run,)).fetchone()
-            if existing:
-                result = {"status": "recorded", "article": existing[0], "delivery_status": existing[1]}
-                article = Path(existing[0])
-                if article.parent == site / "src/posts":
+            article_path, review_reason = db.execute("SELECT article_path,review_reason FROM runs WHERE id=?", (run,)).fetchone()
+            if article_path is not None or review_reason is not None:
+                result = {"status": "reviewed", "run": run, "article": article_path, "review_reason": review_reason}
+                article = Path(article_path) if article_path else None
+                if article is not None and article.parent == site / "src/posts":
                     result.update(site_dir=str(site), output_dir=str(site / "_site"),
+                                  html=str(site / "_site/posts" / article.stem / "index.html"),
                                   post_url=f"/posts/{article.stem}/")
                 return result
             if not site.resolve().is_relative_to(state):
                 raise ValueError("Journal must remain inside the project state directory")
+            if action == "skip":
+                collect.record_review(db, repo, run, reason=reason)
+                return {"status": "reviewed", "run": run, "article": None, "review_reason": reason.strip()}
             initialize(site, repo)
             metadata = article_metadata(repo, run, *evidence)
             filename = f"{metadata['date']}-run-{run}.md"
@@ -78,53 +80,56 @@ def journal(workspace, repo, run, action):
             article = published if published.exists() else draft
             result = {
                 "status": "draft", "site_dir": str(site), "article": str(article),
-                "prompts": str(site / "image-prompts.json"),
                 "output_dir": str(site / "_site"),
+                "html": str(site / "_site/posts" / article.stem / "index.html"),
                 "post_url": f"/posts/{article.stem}/",
             }
             if action == "prepare":
                 if not article.exists():
-                    starter = (site / "templates/post.md").read_text().split("---", 2)[2].lstrip()
-                    article.write_text("---\n" + json.dumps(metadata, indent=2) + "\n---\n\n" + starter)
+                    article.write_text("---\n" + json.dumps(metadata, indent=2) + "\n---\n\n")
                 return result
             if not article.is_file():
                 raise ValueError("Prepare the article before publishing")
-            if "<!-- project-briefing: draft -->" in article.read_text():
-                raise ValueError("Replace the article scaffold and remove its draft marker before publishing")
             try:
-                actual = json.loads(article.read_text().removeprefix("---\n").split("\n---\n", 1)[0])
-            except (ValueError, IndexError) as error:
-                raise ValueError("Keep the prepared JSON frontmatter; edit its values and the Markdown body") from error
+                header, body = article.read_text().removeprefix("---\n").split("\n---\n", 1)
+                actual = json.loads(header)
+                if not isinstance(actual, dict):
+                    raise ValueError("Frontmatter must be an object")
+            except ValueError as error:
+                raise ValueError("Keep the prepared JSON frontmatter and write the article below it") from error
+            if not body.strip() or "<!-- project-briefing: draft -->" in body:
+                raise ValueError("Write the article before publishing")
             for key in ("run", "source", "date", "window"):
                 if actual.get(key) != metadata[key]:
                     raise ValueError(f"Do not change the collector-derived {key}")
-            if not (site / "node_modules/@11ty/eleventy/cmd.cjs").is_file():
-                subprocess.run(["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"], cwd=site, check=True, timeout=180, stdout=sys.stderr)
+            if not (ENGINE / "node_modules/@11ty/eleventy/cmd.cjs").is_file():
+                subprocess.run(["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"], cwd=ENGINE, check=True, timeout=180, stdout=sys.stderr)
             moved = article == draft
             if moved:
                 draft.rename(published)
             try:
-                subprocess.run([sys.executable, "build.py"], cwd=site, check=True, timeout=180, stdout=sys.stderr)
+                subprocess.run([sys.executable, str(ENGINE / "build.py"), str(site)], cwd=site, check=True, timeout=180, stdout=sys.stderr)
             except (OSError, subprocess.SubprocessError):
                 if moved:
                     published.rename(draft)
                 raise
-            collect.record_output(db, repo, run, published, "pending")
+            collect.record_review(db, repo, run, article=published)
             return {**result, "article": str(published),
-                    "status": "built", "delivery_status": "pending"}
+                    "status": "built"}
         finally:
             db.close()
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["prepare", "publish"])
+    parser.add_argument("action", choices=["prepare", "publish", "skip"])
     parser.add_argument("--workspace", type=Path, required=True)
     parser.add_argument("--repo", required=True)
     parser.add_argument("--run", type=int, required=True)
+    parser.add_argument("--reason", help="Why this run needs no article (required for skip)")
     args = parser.parse_args()
     try:
-        print(json.dumps(journal(args.workspace, args.repo, args.run, args.action)))
+        print(json.dumps(journal(args.workspace, args.repo, args.run, args.action, args.reason)))
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
         parser.exit(1, f"Journal update failed: {error}\n")
 

@@ -51,19 +51,16 @@ class JournalTests(unittest.TestCase):
     def draft(self, run=1):
         result = self.command("prepare", run)
         site = Path(result["site_dir"])
-        dependencies = SKILL / "journal/node_modules"
+        dependencies = SKILL / "assets/journal/node_modules"
         self.assertTrue((dependencies / "@11ty/eleventy/cmd.cjs").is_file(),
-                        "Run npm ci --prefix skills/project-briefing/journal before journal tests")
-        if not (site / "node_modules").exists():
-            (site / "node_modules").symlink_to(dependencies, target_is_directory=True)
+                        "Run npm ci --prefix skills/project-briefing/assets/journal before journal tests")
         return result
 
     def author(self, run=1, artwork=False):
         result = self.draft(run)
         article = Path(result["article"])
         metadata = json.loads(article.read_text().split("---", 2)[1])
-        metadata.update(title=f"Engineering update {run}", description="An evidence-linked update with literal --- punctuation.",
-                        topics=[{"label": "Actual heading", "id": "actual-heading"}])
+        metadata.update(title=f"Engineering update {run}", description="An evidence-linked update with literal --- punctuation.")
         if artwork:
             metadata.update(cover=f"/assets/illustrations/run-{run}.svg",
                             coverAlt="Disposable test fixture.", coverCaption="Test artwork fixture.")
@@ -90,7 +87,7 @@ class JournalTests(unittest.TestCase):
         self.assertEqual(site["repository"], "https://github.com/example/widgets")
         self.assertEqual(len(list(article.parent.glob("*.md"))), 1)
 
-    def test_two_posts_archive_and_delivery_state_survive_retry(self):
+    def test_two_posts_archive_and_review_survive_retry(self):
         first = self.author(artwork=True)
         built = self.command("publish")
         self.assertEqual(built["status"], "built")
@@ -109,22 +106,75 @@ class JournalTests(unittest.TestCase):
         self.assertNotIn('src=""', homepage + archive + second_html)
         self.assertIn("Engineering update 2", featured)
         for entry in (built, second):
-            self.assertIn(entry["post_url"], archive)
+            self.assertIn(".." + entry["post_url"] + "index.html", archive)
             self.assertTrue((site / entry["post_url"].lstrip("/") / "index.html").is_file())
+            self.assertEqual(Path(entry["html"]), site / entry["post_url"].lstrip("/") / "index.html")
+        for page in site.rglob("*.html"):
+            self.assertNotRegex(page.read_text(), r'(?:href|src)="/(?!/)')
+        self.assertIn('href="../../index.html"', second_html)
+        self.assertIn('href="../../assets/style.css"', second_html)
         self.assertEqual(hashlib.sha256(Path(built["article"]).read_bytes()).hexdigest(), article_hash)
         self.assertEqual(hashlib.sha256(art.read_bytes()).hexdigest(), art_hash)
         with sqlite3.connect(self.state / "activity.sqlite") as db:
-            self.assertEqual(db.execute("SELECT briefing_path FROM run_outputs WHERE run_id=1").fetchone()[0], built["article"])
-            db.execute("UPDATE run_outputs SET delivery_status='confirmed' WHERE run_id=1")
+            self.assertEqual(db.execute("SELECT article_path FROM runs WHERE id=1").fetchone()[0], built["article"])
         before = snapshot(site)
         retry = self.command("publish")
-        self.assertEqual(retry["status"], "recorded")
-        self.assertEqual(retry["delivery_status"], "confirmed")
+        self.assertEqual(retry["status"], "reviewed")
         self.assertEqual(retry["output_dir"], built["output_dir"])
         self.assertEqual(retry["post_url"], built["post_url"])
         self.assertEqual(snapshot(site), before)
 
-    def test_starter_cannot_publish_with_only_metadata_filled(self):
+    def test_code_examples_are_literal_even_in_existing_journals(self):
+        prepared = self.author()
+        site = Path(prepared["site_dir"])
+        (site / "build.py").write_text('raise RuntimeError("Obsolete local builder")')
+        (site / "eleventy.config.cjs").write_text('throw new Error("Obsolete renderer");')
+        article = Path(prepared["article"])
+        metadata, body = article.read_text().removeprefix("---\n").split("\n---\n", 1)
+        metadata = json.loads(metadata)
+        # Neither new nor older articles need an author-supplied rendering override.
+        snippet = "token: ${{ secrets.GITHUB_TOKEN }}\n{% if enabled %}{{ value }}{% endif %}"
+        article.write_text("---\n" + json.dumps(metadata) + "\n---\n" + body + "\n```yaml\n" + snippet + "\n```\n")
+        built = self.command("publish")
+        html = (Path(built["output_dir"]) / built["post_url"].lstrip("/") / "index.html").read_text()
+        self.assertIn(snippet, html)
+        about = (Path(built["output_dir"]) / "about/index.html").read_text()
+        self.assertIn("https://github.com/example/widgets", about)
+        self.assertNotIn("{{ site.repository }}", about)
+        self.assertFalse((site / "node_modules").exists())
+
+    def test_same_day_articles_sort_by_run(self):
+        with sqlite3.connect(self.state / "activity.sqlite") as db:
+            for run in (9, 10):
+                db.execute("INSERT INTO runs(id,repo,started,finished,status,since) VALUES(?,?,?,?,?,?)",
+                           (run, "example/widgets", "2026-11-15T09:00:00Z", "2026-11-15T09:01:00Z", "complete", "2026-11-14T09:00:00Z"))
+        for run in (9, 10):
+            self.author(run)
+            built = self.command("publish", run)
+        homepage = (Path(built["output_dir"]) / "index.html").read_text()
+        featured = homepage.split('id="latest-title"', 1)[1].split("</h2>", 1)[0]
+        self.assertIn("Engineering update 10", featured)
+        archive = (Path(built["output_dir"]) / "archive/index.html").read_text()
+        self.assertLess(archive.index("Engineering update 10"), archive.index("Engineering update 9"))
+
+    def test_skip_saves_reason_without_files_and_retry_preserves_it(self):
+        command = ["python3", str(SCRIPT), "skip", "--workspace", str(self.workspace),
+                   "--repo", "example/widgets", "--run", "1", "--reason", "Only bot metadata changed."]
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        decision = json.loads(result.stdout)
+        self.assertEqual(decision["review_reason"], "Only bot metadata changed.")
+        self.assertIsNone(decision["article"])
+        self.assertFalse((self.state / "journal").exists())
+        self.assertEqual(list(self.state.glob("*.md")), [])
+        self.assertEqual(self.command("prepare"), decision)
+        command[-1] = "A retry must preserve the original decision."
+        retry = subprocess.run(command, capture_output=True, text=True, check=True)
+        self.assertEqual(json.loads(retry.stdout), decision)
+        with sqlite3.connect(self.state / "activity.sqlite") as db:
+            self.assertEqual(db.execute("SELECT article_path,review_reason FROM runs WHERE id=1").fetchone(),
+                             (None, "Only bot metadata changed."))
+
+    def test_empty_article_cannot_publish_with_only_metadata_filled(self):
         self.author()
         first = self.command("publish")
         previous = snapshot(Path(first["output_dir"]))
@@ -135,11 +185,11 @@ class JournalTests(unittest.TestCase):
         metadata.update(title="A finished headline", description="A finished description.")
         article.write_text("---\n" + json.dumps(metadata) + "\n---\n" + body)
         failed = self.command("publish", 2, succeeds=False)
-        self.assertIn("Replace the article scaffold", failed.stderr)
+        self.assertIn("Write the article", failed.stderr)
         self.assertEqual(snapshot(Path(first["output_dir"])), previous)
         self.assertTrue(article.is_file())
         with sqlite3.connect(self.state / "activity.sqlite") as db:
-            self.assertIsNone(db.execute("SELECT 1 FROM run_outputs WHERE run_id=2").fetchone())
+            self.assertEqual(db.execute("SELECT article_path,review_reason FROM runs WHERE id=2").fetchone(), (None, None))
         self.author(2)
         self.assertEqual(self.command("publish", 2)["status"], "built")
 
@@ -152,9 +202,9 @@ class JournalTests(unittest.TestCase):
         good = article.read_text()
         variants = {
             "missing diagram": good + "\n![Request path](/assets/diagrams/absent.svg)\n",
-            "missing optional cover": good.replace('"topics":', '"cover": "/assets/absent.png", "coverAlt": "Missing optional art", "topics":'),
-            "cover without alt": good.replace('"topics":', '"cover": "/assets/favicon.svg", "topics":'),
-            "broken anchor": good.replace('"id": "actual-heading"', '"id": "absent-heading"'),
+            "missing optional cover": good.replace('"title":', '"cover": "/assets/absent.png", "coverAlt": "Missing optional art", "title":'),
+            "cover without alt": good.replace('"title":', '"cover": "/assets/favicon.svg", "title":'),
+            "broken anchor": good + "\n[Missing heading](#absent-heading)\n",
             "broken link": good + "\n[Broken](/no-such-page/)\n",
             "placeholder": good.replace('"title": "Engineering update 2"', '"title": "TODO: headline"'),
             "changed evidence": good.replace("2026-11-09T12:00:00Z", "2020-01-01T00:00:00Z"),
@@ -165,13 +215,14 @@ class JournalTests(unittest.TestCase):
                 self.command("publish", 2, succeeds=False)
                 self.assertEqual(snapshot(Path(first["output_dir"])), previous)
                 with sqlite3.connect(self.state / "activity.sqlite") as db:
-                    self.assertIsNone(db.execute("SELECT 1 FROM run_outputs WHERE run_id=2").fetchone())
+                    self.assertEqual(db.execute("SELECT article_path,review_reason FROM runs WHERE id=2").fetchone(), (None, None))
         article.write_text(good)
         self.assertEqual(self.command("publish", 2)["status"], "built")
 
     def test_text_only_publication_needs_no_image_provenance(self):
         draft = self.author()
-        Path(draft["prompts"]).unlink()
+        self.assertNotIn("prompts", draft)
+        self.assertFalse((Path(draft["site_dir"]) / "image-prompts.json").exists())
         built = self.command("publish")
         output = Path(built["output_dir"])
         for page in (output / "index.html", output / "archive/index.html",
@@ -193,7 +244,7 @@ class JournalTests(unittest.TestCase):
         built = self.command("publish")
         output = Path(built["output_dir"])
         html = (output / built["post_url"].lstrip("/") / "index.html").read_text()
-        self.assertIn('src="/assets/diagrams/request-path.svg"', html)
+        self.assertIn('src="../../assets/diagrams/request-path.svg"', html)
         self.assertIn("https://example.com/source", html)
         self.assertEqual((output / "assets/diagrams/request-path.svg").read_bytes(), diagram.read_bytes())
         self.assertNotIn('class="article-cover"', html)
@@ -219,7 +270,7 @@ class PackageSelectionTests(unittest.TestCase):
         manifest = (ROOT / "CLAW.md").read_text()
         selected = re.findall(r"^    - source: (.+)$", manifest, re.MULTILINE)
         expected = {p.relative_to(ROOT).as_posix() for p in SKILL.rglob("*")
-                    if p.is_file() and not any(part in {"node_modules", "__pycache__", "_site"} for part in p.parts)}
+                    if p.is_file() and not any(part in {"node_modules", "__pycache__", "_site", ".DS_Store"} for part in p.parts)}
         self.assertEqual(set(selected), expected)
         self.assertEqual(len(selected), len(set(selected)))
         for name in selected:

@@ -45,6 +45,15 @@ class RefreshTests(unittest.TestCase):
             self.assertEqual(r.run(root, execute)["projects"][0]["status"], "complete")
             self.assertEqual(json.loads(path.read_text())["projects"][0], row)
 
+    def test_project_directories_cannot_overlap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for states in (("data/a", "data/a"), ("data/a", "data/a/b"), ("data/a/b", "data/a")):
+                (root / "projects.json").write_text(json.dumps({"projects": [
+                    {"repo": "org/a", "state_dir": states[0]}, {"repo": "org/b", "state_dir": states[1]}]}))
+                result = r.run(root, execute=lambda *a, **k: self.fail("Overlapping projects collected"))
+                self.assertEqual(result["status"], "blocked")
+
     def test_one_failure_does_not_block_other_repo_and_recovery_is_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
@@ -68,22 +77,122 @@ class RefreshTests(unittest.TestCase):
             with (root/'refresh.lock').open('w') as lock:
                 fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
                 self.assertEqual(r.run(root)['status'],'busy')
-    def test_actual_cli_baseline_and_delta_with_fake_gh(self):
-        import os
+    def test_cli_collect_publish_update_and_skip(self):
+        import datetime as dt
+        import sqlite3
         import sys
         with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp); binary=root/'gh'
-            binary.write_text('#!/usr/bin/env python3\nimport json,sys\ne=sys.argv[2]\nprint(json.dumps({"total_count":0,"incomplete_results":False} if e.startswith("search/issues?") else {"default_branch":"main"} if e=="repos/org/a" else []))\n')
+            root = Path(tmp).resolve()
+            binary = root / "gh"
+            binary.write_text("#!/usr/bin/env python3\nimport json,sys\nfrom pathlib import Path\nfrom urllib.parse import urlsplit,parse_qs\n"
+                              "responses=json.loads(Path(__file__).with_name('responses.json').read_text())\n"
+                              "url=urlsplit(sys.argv[2]); query=parse_qs(url.query); data=responses[url.path]\n"
+                              "if isinstance(data,list):\n"
+                              "    size=int(query.get('per_page',['100'])[0]); page=int(query.get('page',['1'])[0]); data=data[(page-1)*size:page*size]\n"
+                              "print(json.dumps(data))\n")
             binary.chmod(0o700)
-            (root/'projects.json').write_text(json.dumps({'projects':[{'repo':'org/a','state_dir':'data/a'}]}))
-            env=dict(os.environ,PATH=str(root)+os.pathsep+os.environ['PATH'])
-            command=[sys.executable,r.__file__,'--workspace',str(root)]
-            for number in (1,2):
-                result=subprocess.run(command,env=env,check=True,capture_output=True,text=True)
-                payload=json.loads(result.stdout)
-                self.assertEqual(payload['projects'][0]['status'],'complete')
-                self.assertEqual(payload['projects'][0]['run'],number)
-                self.assertTrue((root/f'data/a/run-{number}.md').is_file())
+            # Only the repository is required. State location and budgets have defaults.
+            (root / "projects.json").write_text(json.dumps({"projects": [{"repo": "org/a"}, {"repo": "org/b"}]}))
+            stamp = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+            pr = {"number": 7, "title": "Cancel disconnected requests", "body": "Initial proposal",
+                  "updated_at": stamp, "html_url": "https://github.com/org/a/pull/7"}
+            responses = {"search/issues": {"total_count": 1, "incomplete_results": False}, "repos/org/a": {"default_branch": "main"}, "repos/org/a/pulls": [pr],
+                         "repos/org/a/commits": [], "repos/org/a/releases": []}
+            responses.update({"repos/org/b": {"default_branch": "main"},
+                              "repos/org/b/pulls": [{**pr, "title": "A separate project change", "html_url": "https://github.com/org/b/pull/7"}],
+                              "repos/org/b/commits": [], "repos/org/b/releases": []})
+            env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ["PATH"])
+            scripts = Path(r.__file__).parent
+            def invoke(script, *args):
+                result = subprocess.run([sys.executable, str(scripts / script), *args],
+                                        env=env, check=True, capture_output=True, text=True, timeout=60)
+                return json.loads(result.stdout)
+            def journal(action, number, *args):
+                return invoke("journal.py", action, "--workspace", str(root), "--repo", "org/a",
+                              "--run", str(number), *args)
+            (root / "responses.json").write_text(json.dumps(responses))
+            estimate = invoke("collect.py", "--repo", "org/a", "--state-dir", str(root / "data/org--a"), "--estimate")
+            self.assertEqual(estimate["estimated"], 1)
+            self.assertFalse((root / "data").exists())
+            first = None
+            for number in (1, 2, 3):
+                if number == 2:
+                    pr["body"] = "Revised cancellation mechanism"
+                (root / "responses.json").write_text(json.dumps(responses))
+                payload = invoke("refresh.py", "--workspace", str(root))
+                self.assertEqual(payload["status"], "complete")
+                result = payload["projects"][0]
+                self.assertEqual(result["changed_records"], 0 if number == 3 else 1)
+                self.assertEqual(result["pending_runs"], [number])
+                saved = invoke("collect.py", "--repo", "org/a", "--state-dir", result["state_dir"], "--run", str(number))
+                self.assertEqual(len(saved["candidates"]), 0 if number == 3 else 1)
+                if number < 3:
+                    self.assertEqual(saved["candidates"][0]["title"], "Cancel disconnected requests")
+                if number == 3:
+                    journal("skip", number, "--reason", "Reviewed sample; no further change.")
+                    continue
+                prepared = journal("prepare", number)
+                article = Path(prepared["article"])
+                metadata = json.loads(article.read_text().split("---", 2)[1])
+                metadata.update(title=f"Cancellation update {number}", description=pr["body"])
+                article.write_text("---\n" + json.dumps(metadata) + "\n---\n\n"
+                                   "[Proposal](https://github.com/org/a/pull/7)\n\n"
+                                   "```yaml\ntoken: ${{ secrets.GITHUB_TOKEN }}\n```\n")
+                built = journal("publish", number)
+                html = (Path(built["output_dir"]) / built["post_url"].lstrip("/") / "index.html").read_text()
+                self.assertIn("token: ${{ secrets.GITHUB_TOKEN }}", html)
+                if number == 1:
+                    published = Path(built["article"])
+                    first = (published, published.read_bytes())
+            self.assertEqual(first[0].read_bytes(), first[1])
+            state = Path(result["state_dir"])
+            self.assertEqual(list(state.glob("*.md")), [])
+            archive = (state / "journal/_site/archive/index.html").read_text()
+            self.assertIn("Cancellation update 1", archive)
+            self.assertIn("Cancellation update 2", archive)
+            self.assertNotIn("Cancellation update 3", archive)
+            self.assertEqual(invoke("collect.py", "--repo", "org/a", "--state-dir", str(state),
+                                    "--pending")["pending_runs"], [])
+            with sqlite3.connect(state / "activity.sqlite") as db:
+                before, after = db.execute("SELECT before_json,after_json FROM changes WHERE run_id=2").fetchone()
+                self.assertEqual(json.loads(before)["pr"]["body"], "Initial proposal")
+                self.assertEqual(json.loads(after)["pr"]["body"], "Revised cancellation mechanism")
+            other = root / "data/org--b"
+            pending = invoke("collect.py", "--repo", "org/b", "--state-dir", str(other), "--pending")
+            self.assertEqual(pending["pending_runs"], [1, 2, 3])
+            original = {p.relative_to(state): p.read_bytes() for p in state.rglob("*") if p.is_file()}
+            args = ["--workspace", str(root), "--repo", "org/b", "--run", "1"]
+            prepared = invoke("journal.py", "prepare", *args)
+            article = Path(prepared["article"])
+            metadata = json.loads(article.read_text().split("---", 2)[1])
+            metadata.update(title="A separate project change", description="Independent project coverage.")
+            article.write_text("---\n" + json.dumps(metadata) + "\n---\n\n[Source](https://github.com/org/b/pull/7)\n")
+            built = invoke("journal.py", "publish", *args)
+            self.assertTrue(Path(built["article"]).is_relative_to(other))
+            homepage = (Path(built["output_dir"]) / "index.html").read_text()
+            self.assertIn("A separate project change", homepage)
+            self.assertNotIn("Cancellation update", homepage)
+            self.assertEqual({p.relative_to(state): p.read_bytes() for p in state.rglob("*") if p.is_file()}, original)
+            self.assertEqual(invoke("collect.py", "--repo", "org/b", "--state-dir", str(other), "--pending")["pending_runs"], [2, 3])
+            with sqlite3.connect(other / "activity.sqlite") as db:
+                self.assertEqual(db.execute("SELECT DISTINCT repo FROM objects").fetchall(), [("org/b",)])
+            # The normal daily caller reports overflow, then honors the saved budget.
+            responses["search/issues"]["total_count"] = 150
+            responses["repos/org/a/pulls"] = [{**pr, "number": n} for n in range(150)]
+            (root / "responses.json").write_text(json.dumps(responses))
+            blocked = invoke("refresh.py", "--workspace", str(root))
+            self.assertEqual(blocked["status"], "partial")
+            self.assertEqual(blocked["projects"][0]["status"], "needs_scope")
+            self.assertEqual(blocked["projects"][0]["pending_runs"], [])
+            (root / "projects.json").write_text(json.dumps({"projects": [
+                {"repo": "org/a", "max_prs": 200}, {"repo": "org/b", "max_prs": 200}]}))
+            resumed = invoke("refresh.py", "--workspace", str(root))
+            self.assertEqual(resumed["status"], "complete")
+            self.assertEqual(resumed["projects"][0]["changed_records"], 149)
+            with sqlite3.connect(state / "activity.sqlite") as db:
+                self.assertEqual(db.execute("SELECT count(*) FROM objects WHERE kind='pr'").fetchone()[0], 150)
+                self.assertEqual(db.execute("SELECT count(DISTINCT since) FROM runs WHERE id IN (4,5)").fetchone()[0], 1)
+
     def test_blocker_signature_ignores_changing_request_windows(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)

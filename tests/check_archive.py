@@ -12,7 +12,7 @@ SOURCE = Path(__file__).resolve().parents[1]
 
 def check(artifact):
     with tempfile.TemporaryDirectory(prefix="briefing-archive-") as temporary:
-        temporary = Path(temporary)
+        temporary = Path(temporary).resolve()
         with tarfile.open(artifact) as archive:
             archive.extractall(temporary, filter="data")
             files = {m.name for m in archive.getmembers() if m.isfile()}
@@ -22,7 +22,7 @@ def check(artifact):
         expected.update({"package/CLAW.md", "package/BOOTSTRAP.md", "package/package.json"})
         if files != expected:
             raise ValueError(f"Archive selection mismatch: {files ^ expected}")
-        subprocess.run(["npm", "ci", "--prefix", str(package / "skills/project-briefing/journal"),
+        subprocess.run(["npm", "ci", "--prefix", str(package / "skills/project-briefing/assets/journal"),
                         "--ignore-scripts", "--no-audit", "--no-fund"], check=True, timeout=180)
         env = dict(os.environ, PROJECT_BRIEFING_TEST_PACKAGE=str(package))
         subprocess.run(["python3", "-m", "unittest", "discover", "-s", str(SOURCE / "tests"),

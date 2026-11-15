@@ -7,7 +7,6 @@ layout: base.njk
     <div class="post-meta"><time datetime="{{ date | isoDate }}">{{ date | dateLabel }}</time><span>{{ content | readingTime }} min read</span></div>
     <h1>{{ title }}</h1>
     <p class="article-dek">{{ description }}</p>
-    <div class="topic-list">{% for topic in topics %}<span>{{ topic.label }}</span>{% endfor %}</div>
   </header>
   {% if cover %}<figure class="article-cover">
     <img src="{{ cover }}" alt="{{ coverAlt }}" width="1536" height="1024" fetchpriority="high">
@@ -15,15 +14,13 @@ layout: base.njk
   </figure>{% endif %}
   <div class="article-layout">
     <aside class="article-aside">
-      <div class="contents-label">In this entry</div>
-      <nav aria-label="Table of contents">{% for topic in topics %}<a href="#{{ topic.id }}">{{ topic.label }}</a>{% endfor %}</nav>
-      <div class="observation-note"><span class="small-label">Observation window</span><p>{{ window }}</p><p>PR states reflect this checkpoint, not a live status feed.</p></div>
+      <div class="observation-note"><span class="small-label">Observation window</span><p>{{ window }}</p><p>PR states reflect this observation window.</p></div>
     </aside>
     <div class="article-prose">{{ content | safe }}<div class="article-endmark" aria-hidden="true">/ /</div></div>
   </div>
   <section class="post-tail">
     <span class="small-label">Keep following the work</span>
     <a href="/archive/">Explore the journal archive <span aria-hidden="true">↗</span></a>
-    <p>Each new poll becomes a new entry. Earlier observations stay dated and intact.</p>
+    <p>Meaningful developments become new entries. Earlier observations stay dated and intact.</p>
   </section>
 </article>

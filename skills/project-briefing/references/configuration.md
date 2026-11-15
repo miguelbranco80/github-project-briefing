@@ -54,8 +54,8 @@ history. Each article path belongs to that project.
 
 ## Updating project settings
 
-Merge requested changes into `projects.json` atomically, preserving other projects. Agree changes to
-focus or budgets with the reader. A changed filter begins a new baseline;
+Merge requested changes into `projects.json` atomically, preserving other projects.
+A changed filter begins a new baseline;
 otherwise collection continues from the previous checkpoint with a 24-hour overlap.
 Keep background knowledge in the articles; do not copy these settings into research notes.
 

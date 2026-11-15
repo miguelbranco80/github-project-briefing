@@ -18,8 +18,8 @@ For a new project, find out which GitHub project the reader wants to follow and
 what interests them. Look at recent work before recommending a focus. If they have
 no preference, choose a useful starting point and explain it. Check the
 [workload](references/commands.md#check-scope) before collecting. For a busy repository,
-use recent work and the reader's interests to recommend a focus or budget; agree
-meaningful trade-offs with them.
+recommend a useful scope based on recent work and the reader’s interests. Agree
+the time window and focus with them; choose PR and commit limits to cover that scope.
 
 Save the repository and interests using [configuration.md](references/configuration.md),
 then follow Research, Write and Finish below for the first briefing. Afterwards,
@@ -32,8 +32,9 @@ later repository, focus or schedule changes.
 Read the interests in `projects.json` and the project's previous articles. Follow
 [Collect and review](references/commands.md#collect-and-review) to collect candidates
 and read unreviewed runs from SQLite. Continue within the saved agreement.
-If collection returns `needs_scope`, explain the limit and recommend an adjustment;
-resume after agreement. The collector retains the unfinished window.
+If collection returns `needs_scope`, increase the relevant collection limits and retry.
+Ask the reader only if completing collection requires changing the agreed scope.
+The collector retains the unfinished window.
 
 Choose the changes that matter to this reader. Read their discussions and the
 relevant code or design. Follow related work back to the underlying problem;

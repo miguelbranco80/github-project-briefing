@@ -1,5 +1,7 @@
 """Run the packaged journal commands against disposable, generic project data."""
+from contextlib import closing
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -13,6 +15,9 @@ import unittest
 ROOT = Path(os.environ.get("PROJECT_BRIEFING_TEST_PACKAGE", Path(__file__).resolve().parents[1])).resolve()
 SKILL = ROOT / "skills/project-briefing"
 SCRIPT = SKILL / "scripts/journal.py"
+spec = importlib.util.spec_from_file_location("collect", SKILL / "scripts/collect.py")
+collect = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(collect)
 
 
 def snapshot(path):
@@ -30,8 +35,7 @@ class JournalTests(unittest.TestCase):
         (self.workspace / "projects.json").write_text(json.dumps({"projects": [
             {"repo": "example/widgets", "state_dir": "data/example--widgets"}
         ]}))
-        with sqlite3.connect(self.state / "activity.sqlite") as db:
-            db.execute("CREATE TABLE runs(id INTEGER PRIMARY KEY,repo TEXT,started TEXT,finished TEXT,status TEXT,since TEXT,error TEXT)")
+        with closing(collect.connect(self.state / "activity.sqlite")) as db, db:
             db.executemany("INSERT INTO runs(id,repo,started,finished,status,since,error) VALUES(?,?,?,?,?,?,NULL)", [
                 (1, "example/widgets", "2026-11-10T12:00:00Z", "2026-11-10T12:01:00Z", "complete", "2026-11-03T12:00:00Z"),
                 (2, "example/widgets", "2026-11-11T12:00:00Z", "2026-11-11T12:01:00Z", "complete", "2026-11-09T12:00:00Z"),

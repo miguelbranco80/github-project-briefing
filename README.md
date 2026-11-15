@@ -25,8 +25,7 @@ are optional.
 3. Write an article in `journal/src/posts/`, or record why none is needed in SQLite.
 4. Build the static blog and update its dashboard reader, including earlier articles.
 
-Collection and review bookkeeping stays in SQLite. Existing `run-N.md` and
-`quiet-N.md` notes are imported before removal; articles and evidence are preserved.
+Collection and review bookkeeping stays in SQLite; articles stay in Markdown.
 
 [SKILL.md](skills/project-briefing/SKILL.md) owns the workflow;
 [BOOTSTRAP.md](BOOTSTRAP.md) points to its setup section. See
@@ -45,6 +44,6 @@ openclaw templates build . --out dist/project-briefing-0.2.5.tgz
 python3 tests/check_archive.py dist/project-briefing-0.2.5.tgz
 ```
 
-Tests use fake GitHub responses and exercise SQLite history, migration, review
+Tests use fake GitHub responses and exercise SQLite history, review
 decisions, collection limits, article builds and project isolation. Verify installation,
 dashboard navigation and scheduled updates in the target OpenClaw environment.

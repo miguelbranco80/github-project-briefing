@@ -1,9 +1,7 @@
 import importlib.util
-from contextlib import closing
 import json
 import os
 from pathlib import Path
-import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -168,61 +166,6 @@ class CollectorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             c.read_run(self.db, "other/repo", run)
         self.assertEqual(c.pending_runs(self.db, "org/repo"), [2])
-
-    def legacy_database(self):
-        path = self.root / "legacy.sqlite"
-        with closing(sqlite3.connect(path)) as db, db:
-            db.execute("CREATE TABLE runs(id INTEGER PRIMARY KEY,repo TEXT,started TEXT,finished TEXT,status TEXT,since TEXT,error TEXT)")
-            db.executemany("INSERT INTO runs VALUES(?,'org/repo','2026-11-01','2026-11-01','complete','2026-10-25',NULL)", [(1,), (2,), (3,)])
-            db.execute("CREATE TABLE run_outputs(run_id INTEGER PRIMARY KEY,briefing_path TEXT,delivery_status TEXT)")
-            db.executemany("INSERT INTO run_outputs VALUES(?,?,?)", [(1, 'article.md', 'confirmed'), (2, 'quiet-2.md', 'not_needed')])
-        return path
-
-    def test_migration_preserves_history_and_removes_only_imported_notes(self):
-        path = self.legacy_database()
-        article = self.root / "article.md"
-        article.write_text("Published article")
-        report, reason = "# Collected activity\nOriginal evidence summary", "# No article\nOnly bot metadata changed."
-        (self.root / "run-1.md").write_text(report)
-        (self.root / "quiet-2.md").write_text(reason)
-        (self.root / "run-99.md").write_text("Unknown run; retain")
-        other = self.root / "other-project"
-        other.mkdir()
-        (other / "quiet-2.md").write_text("Another project's note")
-        # Import on the same connection path used by collect.py and journal.py.
-        for _ in range(2):
-            db = c.connect(path)
-            try:
-                self.assertEqual(db.execute("SELECT article_path,legacy_delivery_status,legacy_report FROM runs WHERE id=1").fetchone(),
-                                 (str(article.resolve()), "confirmed", report))
-                self.assertEqual(c.read_run(db, "org/repo", 2)["review_reason"], reason)
-                self.assertEqual(c.pending_runs(db, "org/repo"), [3])
-                self.assertIsNone(db.execute("SELECT 1 FROM sqlite_master WHERE name='run_outputs'").fetchone())
-            finally:
-                db.close()
-        self.assertEqual(article.read_text(), "Published article")
-        self.assertFalse((self.root / "run-1.md").exists())
-        self.assertFalse((self.root / "quiet-2.md").exists())
-        self.assertEqual((self.root / "run-99.md").read_text(), "Unknown run; retain")
-        self.assertEqual((other / "quiet-2.md").read_text(), "Another project's note")
-
-    def test_failed_import_keeps_old_records_and_files_for_retry(self):
-        path = self.legacy_database()
-        report = self.root / "run-1.md"
-        report.write_text("Collection history")
-        with self.assertRaises(FileNotFoundError):
-            c.connect(path)
-        with closing(sqlite3.connect(path)) as db:
-            self.assertEqual(db.execute("SELECT count(*) FROM run_outputs").fetchone()[0], 2)
-            self.assertIsNone(db.execute("SELECT article_path FROM runs WHERE id=1").fetchone()[0])
-        self.assertEqual(report.read_text(), "Collection history")
-        (self.root / "quiet-2.md").write_text("No relevant changes")
-        db = c.connect(path)
-        try:
-            self.assertEqual(c.pending_runs(db, "org/repo"), [3])
-        finally:
-            db.close()
-        self.assertFalse(report.exists())
 
     def test_busy_repo_retries_original_window_after_budget_agreement(self):
         calls = []

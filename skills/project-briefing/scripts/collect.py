@@ -110,7 +110,9 @@ def connect(path):
     db.executescript("""
     CREATE TABLE IF NOT EXISTS runs(
       id INTEGER PRIMARY KEY, repo TEXT NOT NULL, started TEXT NOT NULL,
-      finished TEXT, status TEXT NOT NULL, since TEXT NOT NULL, error TEXT);
+      finished TEXT, status TEXT NOT NULL, since TEXT NOT NULL, error TEXT,
+      pr_filter TEXT NOT NULL DEFAULT '', coverage TEXT NOT NULL DEFAULT '{}',
+      article_path TEXT, review_reason TEXT, days INTEGER NOT NULL DEFAULT 7);
     CREATE TABLE IF NOT EXISTS objects(
       repo TEXT, kind TEXT, key TEXT, digest TEXT NOT NULL, payload TEXT NOT NULL,
       PRIMARY KEY(repo,kind,key));
@@ -118,64 +120,7 @@ def connect(path):
       run_id INTEGER, kind TEXT, key TEXT, before_json TEXT, after_json TEXT,
       UNIQUE(run_id,kind,key));
     """)
-    columns = {row[1] for row in db.execute("PRAGMA table_info(runs)")}
-    fields = {"pr_filter": "TEXT NOT NULL DEFAULT ''", "coverage": "TEXT NOT NULL DEFAULT '{}'",
-              "article_path": "TEXT", "review_reason": "TEXT", "days": "INTEGER NOT NULL DEFAULT 7",
-              "legacy_report": "TEXT", "legacy_delivery_status": "TEXT"}
-    for name, definition in fields.items():
-        if name not in columns:
-            db.execute(f"ALTER TABLE runs ADD COLUMN {name} {definition}")
-    if str(path) != ":memory:":
-        try:
-            migrate_bookkeeping(db, Path(path).resolve().parent)
-        except Exception:
-            db.close()
-            raise
     return db
-
-
-def migrate_bookkeeping(db, state):
-    """Import old file-backed records before removing their Markdown copies."""
-    imported = {}
-    with db:
-        if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='run_outputs'").fetchone():
-            for run, saved, delivery in db.execute("SELECT run_id,briefing_path,delivery_status FROM run_outputs").fetchall():
-                path = Path(saved)
-                if not path.is_absolute():
-                    path = state / path
-                article, reason = str(path), None
-                if delivery == "not_needed" or (path.parent == state and re.fullmatch(r"quiet-\d+\.md", path.name)):
-                    reason = path.read_text()
-                    if not reason.strip():
-                        raise ValueError(f"Cannot import an empty review: {path}")
-                    article = None
-                    if path.parent == state and not path.is_symlink():
-                        imported[path] = reason
-                result = db.execute("""UPDATE runs SET article_path=?,review_reason=?,legacy_delivery_status=?
-                                       WHERE id=?""", (article, reason, delivery, run))
-                if result.rowcount != 1:
-                    raise ValueError(f"Saved review references missing run {run}")
-            db.execute("DROP TABLE run_outputs")
-        articles = {Path(p).resolve() for (p,) in db.execute("SELECT article_path FROM runs WHERE article_path IS NOT NULL")}
-        for path in state.glob("*.md"):
-            match = re.fullmatch(r"(run|quiet)-(\d+)\.md", path.name)
-            if not match or path.is_symlink() or path.resolve() in articles:
-                continue
-            kind, run = match.groups()
-            row = db.execute("SELECT status,article_path,review_reason FROM runs WHERE id=?", (run,)).fetchone()
-            if not row:
-                continue
-            content = path.read_text()
-            if kind == "run":
-                db.execute("UPDATE runs SET legacy_report=? WHERE id=?", (content, run))
-            elif row[0] == "complete" and row[1] is None and content.strip():
-                db.execute("UPDATE runs SET review_reason=? WHERE id=?", (content, run))
-            else:
-                continue
-            imported[path] = content
-    for path, content in imported.items():
-        if path.resolve() not in articles and path.read_text() == content:
-            path.unlink()
 
 
 def save(db, run, repo, records):

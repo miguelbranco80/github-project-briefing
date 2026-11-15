@@ -56,7 +56,7 @@ Build releases from a clean checkout. CI validates the template and tests the
 built archive on pushes and pull requests, using a pinned OpenClaw source revision.
 
 For the first ClawHub release, sign in as `miguelbranco80` and publish the verified
-archive with `clawhub package publish dist/project-briefing.tgz --family template --display-name "Project Briefing" --wait`.
+archive with `clawhub package publish ./dist/project-briefing.tgz --family template --display-name "Project Briefing" --wait`.
 After publication, configure ClawHub trusted publishing for this repository's
 `release.yml`. For later releases,
 bump `package.json`'s version and manually run **Verify and release** on `main`

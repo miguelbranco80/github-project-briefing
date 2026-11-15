@@ -50,7 +50,7 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/template/dist"
           node --import ./scripts/tsx.mjs src/entry.ts templates build "$GITHUB_WORKSPACE/template" --out "$GITHUB_WORKSPACE/template/dist/project-briefing.tgz"
       - run: python3 tests/check_archive.py dist/project-briefing.tgz
-      - run: npx --yes clawhub@0.26.0 package publish dist/project-briefing.tgz --family template --display-name "Project Briefing" --dry-run
+      - run: npx --yes clawhub@0.26.0 package publish ./dist/project-briefing.tgz --family template --display-name "Project Briefing" --dry-run
       - uses: actions/upload-artifact@v7
         with:
           name: template
@@ -75,7 +75,7 @@ jobs:
           name: template
           path: dist
       - run: >-
-          npx --yes clawhub@0.26.0 package publish dist/project-briefing.tgz
+          npx --yes clawhub@0.26.0 package publish ./dist/project-briefing.tgz
           --family template --display-name "Project Briefing"
           --source-repo "$GITHUB_REPOSITORY" --source-commit "$GITHUB_SHA"
           --wait --wait-timeout 1800

@@ -2,7 +2,6 @@
 import argparse
 import os
 from pathlib import Path
-import re
 import subprocess
 import tarfile
 import tempfile
@@ -17,9 +16,11 @@ def check(artifact):
             archive.extractall(temporary, filter="data")
             files = {m.name for m in archive.getmembers() if m.isfile()}
         package = temporary / "package"
-        selected = re.findall(r"^    - source: (.+)$", (package / "CLAW.md").read_text(), re.MULTILINE)
+        selected = subprocess.check_output(
+            ["git", "ls-files", "--", "skills/project-briefing"], cwd=SOURCE, text=True,
+        ).splitlines()
         expected = {"package/" + name for name in selected}
-        expected.update({"package/CLAW.md", "package/BOOTSTRAP.md", "package/package.json"})
+        expected.update({"package/CLAW.md", "package/BOOTSTRAP.md", "package/package.json", "package/LICENSE"})
         if files != expected:
             raise ValueError(f"Archive selection mismatch: {files ^ expected}")
         subprocess.run(["npm", "ci", "--prefix", str(package / "skills/project-briefing/assets/journal"),

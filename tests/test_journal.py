@@ -290,20 +290,15 @@ class JournalTests(unittest.TestCase):
 
 
 class PackageSelectionTests(unittest.TestCase):
-    def test_all_runtime_resources_selected_without_test_data(self):
+    def test_template_contains_no_project_data(self):
         manifest = (ROOT / "CLAW.md").read_text()
-        selected = re.findall(r"^    - source: (.+)$", manifest, re.MULTILINE)
-        expected = {p.relative_to(ROOT).as_posix() for p in SKILL.rglob("*")
-                    if p.is_file() and not any(part in {"node_modules", "__pycache__", "_site", ".DS_Store"} for part in p.parts)}
-        self.assertEqual(set(selected), expected)
-        self.assertEqual(len(selected), len(set(selected)))
-        for name in selected:
-            with self.subTest(name=name):
-                self.assertTrue((ROOT / name).is_file())
-                self.assertNotIn("/home/miguel/", (ROOT / name).read_text())
-                self.assertNotIn("openclaw-enterprise", (ROOT / name).read_text())
-        self.assertIn("scripts/journal.py", manifest)
-        self.assertNotIn("image-prompts.json", selected)
+        files = [p for p in SKILL.rglob("*") if p.is_file()
+                 and not any(part in {"node_modules", "__pycache__", "_site", ".DS_Store"} for part in p.parts)]
+        for path in files:
+            with self.subTest(path=path):
+                self.assertNotIn("/home/miguel/", path.read_text())
+                self.assertNotIn("openclaw-enterprise", path.read_text())
+                self.assertNotEqual(path.name, "image-prompts.json")
         self.assertEqual(manifest.count("id: daily-project-briefing"), 1)
 
 

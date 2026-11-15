@@ -3,41 +3,10 @@ schemaVersion: 1
 agent:
   id: project-briefing
   name: Project Briefing
+  description: Researches GitHub projects and publishes source-linked engineering briefings.
 categories: [research]
-workspace:
-  files:
-    - source: skills/project-briefing/SKILL.md
-      path: skills/project-briefing/SKILL.md
-    - source: skills/project-briefing/assets/journal/build.py
-      path: skills/project-briefing/assets/journal/build.py
-    - source: skills/project-briefing/assets/journal/eleventy.config.cjs
-      path: skills/project-briefing/assets/journal/eleventy.config.cjs
-    - source: skills/project-briefing/assets/journal/package-lock.json
-      path: skills/project-briefing/assets/journal/package-lock.json
-    - source: skills/project-briefing/assets/journal/package.json
-      path: skills/project-briefing/assets/journal/package.json
-    - source: skills/project-briefing/assets/journal/src/_includes/base.njk
-      path: skills/project-briefing/assets/journal/src/_includes/base.njk
-    - source: skills/project-briefing/assets/journal/src/_includes/post.njk
-      path: skills/project-briefing/assets/journal/src/_includes/post.njk
-    - source: skills/project-briefing/assets/journal/src/assets/favicon.svg
-      path: skills/project-briefing/assets/journal/src/assets/favicon.svg
-    - source: skills/project-briefing/assets/journal/src/assets/style.css
-      path: skills/project-briefing/assets/journal/src/assets/style.css
-    - source: skills/project-briefing/assets/journal/src/index.njk
-      path: skills/project-briefing/assets/journal/src/index.njk
-    - source: skills/project-briefing/assets/journal/src/posts/posts.json
-      path: skills/project-briefing/assets/journal/src/posts/posts.json
-    - source: skills/project-briefing/references/commands.md
-      path: skills/project-briefing/references/commands.md
-    - source: skills/project-briefing/references/configuration.md
-      path: skills/project-briefing/references/configuration.md
-    - source: skills/project-briefing/scripts/collect.py
-      path: skills/project-briefing/scripts/collect.py
-    - source: skills/project-briefing/scripts/journal.py
-      path: skills/project-briefing/scripts/journal.py
-    - source: skills/project-briefing/scripts/refresh.py
-      path: skills/project-briefing/scripts/refresh.py
+skills:
+  - path: skills/project-briefing
 mcpServers: {}
 automations:
   - id: daily-project-briefing

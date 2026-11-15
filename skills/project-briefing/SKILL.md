@@ -53,6 +53,8 @@ Follow [Publish or skip](references/commands.md#publish-or-skip). After publicat
 [update the journal view](references/commands.md#present-the-journal). Introduce
 the new article briefly, or explain during setup if nothing merits publication.
 Keep previous articles and artwork; add dated corrections when needed.
-Scheduled runs update the journal and return `NO_REPLY` unless a blocker needs attention.
+Scheduled runs return a brief announcement when a new article is published and
+notification delivery is enabled; otherwise return `NO_REPLY`. Report blockers
+that need attention.
 
 For failed runs, follow [Recovery](references/commands.md#recovery).

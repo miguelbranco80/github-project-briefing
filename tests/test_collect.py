@@ -1,4 +1,5 @@
 import importlib.util
+from copy import deepcopy
 import json
 import os
 from pathlib import Path
@@ -107,6 +108,49 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual(json.loads(before)["body"], "proposed")
         self.assertEqual(json.loads(after)["body"], "revised")
         self.assertEqual(count, 0)
+
+    def test_repository_metadata_does_not_create_pr_changes(self):
+        pr = {"number": 7, "title": "Fix cancellation", "body": "Cancel disconnected requests.",
+              "state": "open", "updated_at": "2026-11-15T09:00:00Z",
+              "html_url": "https://github.com/org/repo/pull/7",
+              "head": {"ref": "fix", "sha": "abc", "repo": {
+                  "id": 1, "full_name": "contributor/repo", "html_url": "https://github.com/contributor/repo",
+                  "pushed_at": "2026-11-15T08:00:00Z", "open_issues_count": 10}},
+              "base": {"ref": "main", "sha": "def", "repo": {
+                  "id": 2, "full_name": "org/repo", "html_url": "https://github.com/org/repo",
+                  "pushed_at": "2026-11-15T08:00:00Z", "open_issues_count": 20}}}
+        def fetch(endpoint):
+            if endpoint.startswith("search/issues?"): return {"total_count": 1, "incomplete_results": False}
+            if "/pulls?" in endpoint: return [deepcopy(pr)]
+            if endpoint == "repos/org/repo": return {"default_branch": "main"}
+            return []
+        collector = lambda *args, **kwargs: c.collect(*args, fetch=fetch, **kwargs)
+        with patch.object(c, "now", return_value="2026-11-15T10:00:00Z"):
+            _, count = c.refresh(self.db, "org/repo", collector=collector)
+            self.assertEqual(count, 1)
+            stored = json.loads(self.db.execute("SELECT payload FROM objects").fetchone()[0])["pr"]
+            self.assertEqual(stored["body"], pr["body"])
+            self.assertEqual(stored["state"], "open")
+            self.assertEqual(stored["head"], {"ref": "fix", "sha": "abc", "repo": {
+                "id": 1, "full_name": "contributor/repo", "html_url": "https://github.com/contributor/repo"}})
+            self.assertEqual(stored["base"], {"ref": "main", "sha": "def", "repo": {
+                "id": 2, "full_name": "org/repo", "html_url": "https://github.com/org/repo"}})
+            for branch in ("head", "base"):
+                pr[branch]["repo"].update(pushed_at="2026-11-15T09:30:00Z", open_issues_count=30)
+            _, count = c.refresh(self.db, "org/repo", collector=collector)
+            self.assertEqual(count, 0)
+            self.assertEqual(self.db.execute("SELECT count(*) FROM changes").fetchone()[0], 1)
+            pr["head"]["sha"] = "new"
+            run, count = c.refresh(self.db, "org/repo", collector=collector)
+            self.assertEqual(count, 1)
+            before, after = self.db.execute("SELECT before_json,after_json FROM changes WHERE run_id=?", (run,)).fetchone()
+            self.assertEqual(json.loads(before)["pr"]["head"]["sha"], "abc")
+            self.assertEqual(json.loads(after)["pr"]["head"]["sha"], "new")
+            pr["head"]["repo"] = None
+            run, count = c.refresh(self.db, "org/repo", collector=collector)
+            self.assertEqual(count, 1)
+            stored = json.loads(self.db.execute("SELECT payload FROM objects").fetchone()[0])["pr"]
+            self.assertIsNone(stored["head"]["repo"])
 
     def test_failed_collection_and_save_keep_previous_checkpoint(self):
         c.refresh(self.db, "org/repo", collector=candidates([("commit", "a", {})]))

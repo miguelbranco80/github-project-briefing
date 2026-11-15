@@ -93,6 +93,10 @@ def collect(repo, since, until, max_prs=100, max_commits=100, pr_filter="", fetc
     # An updated PR can move between pages while GitHub serves the sample.
     prs = list({pr["number"]: pr for pr in prs}.values())
     coverage["count"] = len(prs)
+    for pr in prs:
+        for ref in (pr.get("head"), pr.get("base")):
+            if ref and ref.get("repo"):
+                ref["repo"] = {key: ref["repo"][key] for key in ("id", "full_name", "html_url")}
     records = [("pr", str(pr["number"]), {"pr": pr}) for pr in prs]
     coverage = {"prs": {**workload, **coverage}}
     if not pr_filter:

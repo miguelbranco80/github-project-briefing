@@ -1,4 +1,4 @@
-"""Verify a built archive in isolation, including a cold locked npm installation."""
+"""Verify archive contents and run the tests against its packaged scripts."""
 import argparse
 import os
 from pathlib import Path
@@ -23,12 +23,10 @@ def check(artifact):
         expected.update({"package/CLAW.md", "package/BOOTSTRAP.md", "package/package.json", "package/LICENSE"})
         if files != expected:
             raise ValueError(f"Archive selection mismatch: {files ^ expected}")
-        subprocess.run(["npm", "ci", "--prefix", str(package / "skills/project-briefing/assets/journal"),
-                        "--ignore-scripts", "--no-audit", "--no-fund"], check=True, timeout=180)
         env = dict(os.environ, PROJECT_BRIEFING_TEST_PACKAGE=str(package))
         subprocess.run(["python3", "-m", "unittest", "discover", "-s", str(SOURCE / "tests"),
                         "-v"], env=env, check=True, timeout=180)
-        print(f"Verified {len(files)} archive files and the collection/journal workflow from extracted package code.")
+        print(f"Verified {len(files)} archive files and the briefing workflow from extracted package code.")
 
 
 if __name__ == "__main__":

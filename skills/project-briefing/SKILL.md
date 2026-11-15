@@ -1,6 +1,6 @@
 ---
 name: project-briefing
-description: Research GitHub projects and publish engineering briefings explaining meaningful changes, decisions and open work.
+description: Research GitHub projects, save engineering briefings and discuss changes with the reader.
 ---
 
 # Project briefing
@@ -8,9 +8,13 @@ description: Research GitHub projects and publish engineering briefings explaini
 Help the reader understand engineering work they would otherwise have to piece
 together from code and discussion. GitHub access is read-only.
 
+When asked what is new, read the saved articles and use the conversation to
+identify what the reader has already seen. Check recent run history if updates
+are missing. Start fresh research when requested or during scheduled runs.
+
 ## Setup
 
-For a new journal, find out which GitHub project the reader wants to follow and
+For a new project, find out which GitHub project the reader wants to follow and
 what interests them. Look at recent work before recommending a focus. If they have
 no preference, choose a useful starting point and explain it. Check the
 [workload](references/commands.md#check-scope) before collecting. For a busy repository,
@@ -51,17 +55,15 @@ how someone would use or adopt the change. Keep general research and
 verification limits in a brief closing coverage note.
 
 Let the news determine the length; a follow-up may need only one story.
-Before publishing, cut repeated caveats, abstract framing and details
+Before saving, cut repeated caveats, abstract framing and details
 that do not help the reader understand the change.
 
 ## Finish
 
-Follow [Publish or skip](references/commands.md#publish-or-skip). In interactive
-runs, [open the journal](references/commands.md#present-the-journal) and introduce
-the new article briefly, or explain during setup if nothing merits publication.
-Keep previous articles and artwork; add dated corrections when needed.
-Scheduled runs return a brief announcement when a new article is published and
-notification delivery is enabled; otherwise return `NO_REPLY`. Report blockers
-that need attention.
+Follow [Save or skip](references/commands.md#save-or-skip) to record the review.
+In interactive runs, summarize the findings in chat and link the saved article.
+Keep earlier articles; add dated corrections when needed.
 
-For failed runs, follow [Recovery](references/commands.md#recovery).
+Scheduled runs save articles quietly and return `NO_REPLY` on success. Record
+blockers in the run's response for later inspection; keep the agreed scope until
+the reader changes it. For failed commands, follow [Recovery](references/commands.md#recovery).

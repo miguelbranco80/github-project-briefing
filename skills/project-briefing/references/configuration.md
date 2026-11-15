@@ -1,4 +1,4 @@
-# Configure the journal
+# Configure project briefings
 
 ## Project settings (`projects.json`)
 
@@ -43,38 +43,31 @@ Each project has its own directory:
 ```text
 data/owner--repo/
   activity.sqlite      collection evidence and review decisions
-  journal/
-    drafts/            Markdown articles being written
-    src/posts/         published Markdown articles
-    src/assets/        styles and artwork
-    _site/             generated static blog
+  articles/            dated Markdown briefings
 ```
 
 SQLite is a local file; it needs no database server. Its `runs` table records each
 collection's window, status and sampling limits. A reviewed run has either an
 `article_path` or a `review_reason`; a completed run with neither still needs review.
 `objects` holds the latest candidate snapshots and `changes` preserves their
-history. The renderer is shared; project data and journals are separate.
+history. Each article path belongs to that project.
 
 ## Updating project settings
 
 Merge requested changes into `projects.json` atomically, preserving other projects. Agree changes to
 focus or budgets with the reader. A changed filter begins a new baseline;
 otherwise collection continues from the previous checkpoint with a 24-hour overlap.
-Keep background knowledge in the journal; do not copy these settings into research notes.
+Keep background knowledge in the articles; do not copy these settings into research notes.
 
 ## Daily job
 
-The template installs a disabled daily job at 09:00 UTC in this agent's main
-session. After setup, keep its prompt and bind it to the journal’s session,
-record the working model and account, and allow the research tools. Enable it and
-tell the reader its schedule. Check the run history
-for authentication or execution failures before claiming scheduled updates work.
-
-The job maintains the journal with notification delivery off. Configure a
-notification destination only when the reader asks for notifications.
+The template installs a disabled daily job at 09:00 UTC in an isolated session,
+with delivery off. After setup, record the working model and account, allow the
+research tools, and enable the job. Tell the reader its schedule and that it saves
+articles for them to discuss in chat. Check run history for authentication or
+execution failures before claiming scheduled updates work.
 
 ## Runtime requirements
 
-The execution environment needs Python 3.10+ on POSIX, Node.js 20.19+, authenticated
-`gh` and OpenClaw portal access. Report a missing capability specifically.
+The execution environment needs Python 3.10+ on POSIX and authenticated `gh`,
+in addition to OpenClaw. Report a missing capability specifically.

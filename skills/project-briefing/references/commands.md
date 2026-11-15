@@ -40,66 +40,37 @@ gh pr view NUMBER --repo OWNER/REPO --comments
 gh pr diff NUMBER --repo OWNER/REPO
 ```
 
-## Publish or skip
+## Save or skip
+
+Write the article as plain Markdown to `STATE/articles/YYYY-MM-DD-run-RUN.md`.
+Use a headline, the article date and the prose described in the skill. Include the
+observation window from the saved run in the closing coverage note. Create the
+articles directory if needed; reuse an existing article for the same run.
+
+Read the completed file, then record it:
 
 ```sh
-python3 scripts/journal.py prepare --workspace WORKSPACE --repo OWNER/REPO --run RUN
+python3 scripts/collect.py --repo OWNER/REPO --state-dir STATE --run RUN --article ARTICLE_PATH
 ```
 
-Edit the returned `article`: fill its title and description and write the Markdown
-body. Keep the other metadata, which identifies the collected evidence. Diagrams
-and requested artwork go under the journal's `src/assets/`; link diagram sources
-and supply alt text. Optional covers use `cover`, `coverAlt` and `coverCaption`.
-On the first article, set `name` in the journal's `src/_data/site.json` to the
-project's name; subsequent builds reuse it.
-
-```sh
-python3 scripts/journal.py publish --workspace WORKSPACE --repo OWNER/REPO --run RUN
-```
-
-Publication builds the project's static site, saves the article path in SQLite
-and returns the article’s `html` path and the journal’s `output_dir`.
 When nothing merits an article, instead run:
 
 ```sh
-python3 scripts/journal.py skip --workspace WORKSPACE --repo OWNER/REPO --run RUN --reason 'Only routine dependency updates; no relevant behavior change.'
+python3 scripts/collect.py --repo OWNER/REPO --state-dir STATE --run RUN --reason 'Only routine dependency updates; no relevant behavior change.'
 ```
 
-This stores the reason in SQLite without creating a Markdown file. Either decision
-removes the run from `pending_runs`; retrying returns the saved decision.
-
-## Present the journal
-
-Reuse the background server for this project's absolute `OUTPUT_DIR`; check its
-process and HTTP response. If none is running, start this through OpenClaw's
-`exec` with `background: true` and `timeoutSeconds: 0` in the journal’s environment:
-
-```sh
-python3 -u -m http.server 0 --bind 127.0.0.1 --directory OUTPUT_DIR
-```
-
-Port `0` binds a free port chosen by the OS. Read the actual port from the process
-output and verify the blog responds. Reuse its entry in `portal list`, or open
-one with `portal` using that port and the repository as its title. Present the
-returned URL unchanged through the available portal view; verify navigation between
-the blog and an article from the reader's browser.
-
-Serve only `_site/`. Keep the process managed by `exec`/`process`. Rebuilds update
-the same site; reload the page to read them. When reopening, check the server and
-portal again: portals end at Gateway restart. A loopback-only portal works only
-on the Gateway host; remote readers need configured portal ingress.
+Either decision removes the run from `pending_runs`. Repeating the same decision
+is safe; a conflicting decision is rejected.
 
 ## Recovery
 
 Fix the reported cause and repeat the failed command. Collection keeps the previous
-checkpoint on failure; publication keeps the previous site. Existing drafts and
-review decisions are reused. To read the queue without GitHub access:
+checkpoint on failure. An unrecorded article remains available to finish and save.
+To read the queue without GitHub access:
 
 ```sh
 python3 scripts/collect.py --repo OWNER/REPO --state-dir STATE --pending
 ```
 
-For a dated correction or requested layout change, edit the existing journal and
-rebuild with `python3 assets/journal/build.py STATE/journal`. This preserves article
-URLs; the running server serves the rebuilt files. Inspect the scheduler's
+For a correction, edit the article and date the correction. Inspect the scheduler's
 history for failed runs before retrying.

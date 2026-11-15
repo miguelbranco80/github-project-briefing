@@ -153,10 +153,16 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout)["candidates"], [{"kind": "commit", "key": "abc",
             "title": "Cancel stale work", "url": "https://github.com/org/repo/commit/abc", "change": "new"}])
         self.assertEqual(list(self.root.glob("*.md")), [])
-        article = self.root / "article.md"
+        article = self.root / "articles/article.md"
+        article.parent.mkdir()
         article.write_text("A reviewed article")
-        c.record_review(self.db, "org/repo", run, article=article)
+        for _ in range(2):
+            result = subprocess.run(command + ["--run", str(run), "--article", str(article)],
+                                    capture_output=True, text=True, check=True)
+            self.assertEqual(json.loads(result.stdout)["article"], str(article.resolve()))
+        self.assertEqual(article.read_text(), "A reviewed article")
         self.assertEqual(c.pending_runs(self.db, "org/repo"), [2])
+
         with self.assertRaises(ValueError):
             c.record_review(self.db, "org/repo", run, reason="Already reviewed")
         for repo, number, reason in (("other/repo", 2, "Nothing relevant"),
@@ -166,6 +172,32 @@ class CollectorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             c.read_run(self.db, "other/repo", run)
         self.assertEqual(c.pending_runs(self.db, "org/repo"), [2])
+
+    def test_review_cli_rejects_invalid_articles_and_preserves_pending_run(self):
+        run, _ = c.refresh(self.db, "org/repo", collector=candidates([]))
+        command = [sys.executable, str(SCRIPT), "--repo", "org/repo", "--state-dir", str(self.root)]
+        articles = self.root / "articles"
+        articles.mkdir()
+        (articles / "empty.md").touch()
+        (articles / "article.html").write_text("An HTML report")
+        outside = self.root / "other-project.md"
+        outside.write_text("Another project's article")
+        (articles / "linked.md").symlink_to(outside)
+        for path in (articles / "missing.md", articles / "empty.md", articles / "article.html",
+                     articles / "linked.md", outside):
+            with self.subTest(path=path):
+                result = subprocess.run(command + ["--run", str(run), "--article", str(path)],
+                                        capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(c.pending_runs(self.db, "org/repo"), [run])
+        result = subprocess.run(command + ["--reason", "No change"], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM runs").fetchone()[0], 1)
+        for _ in range(2):
+            result = subprocess.run(command + ["--run", str(run), "--reason", "No relevant changes"],
+                                    capture_output=True, text=True, check=True)
+            self.assertEqual(json.loads(result.stdout)["review_reason"], "No relevant changes")
+        self.assertEqual(c.pending_runs(self.db, "org/repo"), [])
 
     def test_busy_repo_retries_original_window_after_budget_agreement(self):
         calls = []

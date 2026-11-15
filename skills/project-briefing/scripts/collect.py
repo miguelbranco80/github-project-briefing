@@ -203,16 +203,20 @@ def pending_runs(db, repo):
 
 def record_review(db, repo, run, article=None, reason=None):
     if (article is None) == (reason is None):
-        raise ValueError("Provide an article or a reason for not publishing")
+        raise ValueError("Provide an article or a reason no article is needed")
     if article is not None and (not article.is_file() or not article.read_text().strip()):
         raise ValueError("A saved article is required")
     if reason is not None and not reason.strip():
         raise ValueError("Explain why no article is needed")
+    decision = (str(article.resolve()) if article else None, reason.strip() if reason is not None else None)
     with db:
         result = db.execute("""UPDATE runs SET article_path=?,review_reason=?
             WHERE id=? AND repo=? AND status='complete' AND article_path IS NULL AND review_reason IS NULL""",
-            (str(article.resolve()) if article else None, reason.strip() if reason is not None else None, run, repo))
+            (*decision, run, repo))
         if result.rowcount != 1:
+            previous = db.execute("SELECT article_path,review_reason FROM runs WHERE id=? AND repo=? AND status='complete'", (run, repo)).fetchone()
+            if previous == decision:
+                return
             raise ValueError("Run must be completed, unreviewed and belong to this repository")
 
 
@@ -228,7 +232,16 @@ def main():
     reads.add_argument("--estimate", action="store_true", help="Count PR workload without collecting or creating project state")
     reads.add_argument("--pending", action="store_true", help="List unreviewed runs without accessing GitHub")
     reads.add_argument("--run", type=int, help="Read a saved run and its candidates without accessing GitHub")
+    review = parser.add_mutually_exclusive_group()
+    review.add_argument("--article", type=Path, help="Record a saved Markdown article for --run")
+    review.add_argument("--reason", help="Record why --run needs no article")
     args = parser.parse_args()
+    if (args.article is not None or args.reason is not None) and args.run is None:
+        parser.error("Review decisions require --run")
+    if args.article is not None:
+        args.article = args.article.resolve()
+        if args.article.suffix != ".md" or not args.article.is_relative_to(args.state_dir.resolve() / "articles"):
+            parser.error("Save Markdown articles inside this project's articles/ directory")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo) or min(args.days, args.max_prs, args.max_commits) < 1:
         parser.error("Use owner/repository and positive days/max-prs/max-commits")
     args.pr_filter = args.pr_filter.strip()
@@ -256,6 +269,8 @@ def main():
             if args.pending:
                 result = {"pending_runs": pending_runs(db, args.repo)}
             elif args.run is not None:
+                if args.article is not None or args.reason is not None:
+                    record_review(db, args.repo, args.run, article=args.article, reason=args.reason)
                 result = read_run(db, args.repo, args.run)
             else:
                 run, count = refresh(db, args.repo, args.days, args.max_prs, args.pr_filter, max_commits=args.max_commits)

@@ -77,7 +77,7 @@ class RefreshTests(unittest.TestCase):
             with (root/'refresh.lock').open('w') as lock:
                 fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
                 self.assertEqual(r.run(root)['status'],'busy')
-    def test_cli_collect_publish_update_and_skip(self):
+    def test_cli_collect_save_update_and_skip(self):
         import datetime as dt
         import sqlite3
         import sys
@@ -107,9 +107,6 @@ class RefreshTests(unittest.TestCase):
                 result = subprocess.run([sys.executable, str(scripts / script), *args],
                                         env=env, check=True, capture_output=True, text=True, timeout=60)
                 return json.loads(result.stdout)
-            def journal(action, number, *args):
-                return invoke("journal.py", action, "--workspace", str(root), "--repo", "org/a",
-                              "--run", str(number), *args)
             (root / "responses.json").write_text(json.dumps(responses))
             estimate = invoke("collect.py", "--repo", "org/a", "--state-dir", str(root / "data/org--a"), "--estimate")
             self.assertEqual(estimate["estimated"], 1)
@@ -129,28 +126,25 @@ class RefreshTests(unittest.TestCase):
                 if number < 3:
                     self.assertEqual(saved["candidates"][0]["title"], "Cancel disconnected requests")
                 if number == 3:
-                    journal("skip", number, "--reason", "Reviewed sample; no further change.")
+                    invoke("collect.py", "--repo", "org/a", "--state-dir", result["state_dir"],
+                           "--run", str(number), "--reason", "Reviewed sample; no further change.")
                     continue
-                prepared = journal("prepare", number)
-                article = Path(prepared["article"])
-                metadata = json.loads(article.read_text().split("---", 2)[1])
-                metadata.update(title=f"Cancellation update {number}", description=pr["body"])
-                article.write_text("---\n" + json.dumps(metadata) + "\n---\n\n"
+                article = Path(result["state_dir"]) / "articles" / f"{stamp[:10]}-run-{number}.md"
+                article.parent.mkdir(exist_ok=True)
+                article.write_text(f"# Cancellation update {number}\n\n{pr['body']}\n\n"
                                    "[Proposal](https://github.com/org/a/pull/7)\n\n"
                                    "```yaml\ntoken: ${{ secrets.GITHUB_TOKEN }}\n```\n")
-                built = journal("publish", number)
-                html = (Path(built["output_dir"]) / built["post_url"].lstrip("/") / "index.html").read_text()
-                self.assertIn("token: ${{ secrets.GITHUB_TOKEN }}", html)
+                saved = invoke("collect.py", "--repo", "org/a", "--state-dir", result["state_dir"],
+                               "--run", str(number), "--article", str(article))
+                self.assertEqual(saved["article"], str(article))
                 if number == 1:
-                    published = Path(built["article"])
-                    first = (published, published.read_bytes())
+                    first = (article, article.read_bytes())
             self.assertEqual(first[0].read_bytes(), first[1])
             state = Path(result["state_dir"])
             self.assertEqual(list(state.glob("*.md")), [])
-            blog = (state / "journal/_site/index.html").read_text()
-            self.assertIn("Cancellation update 1", blog)
-            self.assertIn("Cancellation update 2", blog)
-            self.assertNotIn("Cancellation update 3", blog)
+            articles = sorted((state / "articles").glob("*.md"))
+            self.assertEqual(len(articles), 2)
+            self.assertIn("Cancellation update 2", articles[1].read_text())
             self.assertEqual(invoke("collect.py", "--repo", "org/a", "--state-dir", str(state),
                                     "--pending")["pending_runs"], [])
             with sqlite3.connect(state / "activity.sqlite") as db:
@@ -161,17 +155,12 @@ class RefreshTests(unittest.TestCase):
             pending = invoke("collect.py", "--repo", "org/b", "--state-dir", str(other), "--pending")
             self.assertEqual(pending["pending_runs"], [1, 2, 3])
             original = {p.relative_to(state): p.read_bytes() for p in state.rglob("*") if p.is_file()}
-            args = ["--workspace", str(root), "--repo", "org/b", "--run", "1"]
-            prepared = invoke("journal.py", "prepare", *args)
-            article = Path(prepared["article"])
-            metadata = json.loads(article.read_text().split("---", 2)[1])
-            metadata.update(title="A separate project change", description="Independent project coverage.")
-            article.write_text("---\n" + json.dumps(metadata) + "\n---\n\n[Source](https://github.com/org/b/pull/7)\n")
-            built = invoke("journal.py", "publish", *args)
-            self.assertTrue(Path(built["article"]).is_relative_to(other))
-            homepage = (Path(built["output_dir"]) / "index.html").read_text()
-            self.assertIn("A separate project change", homepage)
-            self.assertNotIn("Cancellation update", homepage)
+            article = other / "articles" / f"{stamp[:10]}-run-1.md"
+            article.parent.mkdir()
+            article.write_text("# A separate project change\n\nIndependent project coverage.\n")
+            saved = invoke("collect.py", "--repo", "org/b", "--state-dir", str(other),
+                           "--run", "1", "--article", str(article))
+            self.assertEqual(saved["article"], str(article))
             self.assertEqual({p.relative_to(state): p.read_bytes() for p in state.rglob("*") if p.is_file()}, original)
             self.assertEqual(invoke("collect.py", "--repo", "org/b", "--state-dir", str(other), "--pending")["pending_runs"], [2, 3])
             with sqlite3.connect(other / "activity.sqlite") as db:

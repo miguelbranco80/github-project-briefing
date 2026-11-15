@@ -5,7 +5,8 @@ engineering articles. Each project keeps its evidence and journal in its own fol
 
 ## Start
 
-Requires Python 3.10+ on POSIX, Node.js 20.19+, authenticated `gh`.
+Requires an OpenClaw source build with `templates` and portal support,
+Python 3.10+ on POSIX, Node.js 20.19+, and authenticated `gh`.
 
 ```sh
 gh repo clone miguelbranco80/project-briefing-template
@@ -40,10 +41,27 @@ npm ci --prefix skills/project-briefing/assets/journal --ignore-scripts --no-aud
 python3 -m unittest discover -s tests -v
 openclaw templates validate .
 openclaw templates dev .
-openclaw templates build . --out dist/project-briefing-0.2.5.tgz
-python3 tests/check_archive.py dist/project-briefing-0.2.5.tgz
+mkdir -p dist
+openclaw templates build . --out dist/project-briefing.tgz
+python3 tests/check_archive.py dist/project-briefing.tgz
 ```
 
 Tests use fake GitHub responses and exercise SQLite history, review
 decisions, collection limits, article builds and project isolation. Verify installation,
 portal navigation and scheduled updates in the target OpenClaw environment.
+
+## Release
+
+Build releases from a clean checkout. CI validates the template and tests the
+built archive on pushes and pull requests, using a pinned OpenClaw source revision.
+
+For the first ClawHub release, sign in as `miguelbranco80` and publish the verified
+archive with `clawhub package publish dist/project-briefing.tgz --family template --display-name "Project Briefing" --wait`.
+After publication, configure ClawHub trusted publishing for this repository's
+`release.yml`. For later releases,
+bump `package.json`'s version and manually run **Verify and release** on `main`
+with **Publish this version to ClawHub** enabled. Ordinary pushes never publish.
+
+## License
+
+[MIT](LICENSE).

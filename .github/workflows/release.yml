@@ -1,0 +1,81 @@
+name: Verify and release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish this version to ClawHub
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: template
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          path: template
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      # Templates are not yet available in the published OpenClaw CLI.
+      - uses: actions/checkout@v7.0.1
+        with:
+          repository: openclaw/openclaw
+          ref: 71fe30869afb45a40696ac304c9a794e9b12befe
+          path: .openclaw-cli
+      - run: npm install --global pnpm@12.15.0
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+        working-directory: .openclaw-cli
+      - name: Validate and build template
+        working-directory: .openclaw-cli
+        run: |
+          node --import ./scripts/tsx.mjs src/entry.ts templates validate "$GITHUB_WORKSPACE/template"
+          node --import ./scripts/tsx.mjs src/entry.ts templates dev "$GITHUB_WORKSPACE/template"
+          mkdir -p "$GITHUB_WORKSPACE/template/dist"
+          node --import ./scripts/tsx.mjs src/entry.ts templates build "$GITHUB_WORKSPACE/template" --out "$GITHUB_WORKSPACE/template/dist/project-briefing.tgz"
+      - run: python3 tests/check_archive.py dist/project-briefing.tgz
+      - run: npx --yes clawhub@0.26.0 package publish dist/project-briefing.tgz --family template --display-name "Project Briefing" --dry-run
+      - uses: actions/upload-artifact@v7
+        with:
+          name: template
+          path: template/dist/project-briefing.tgz
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+    needs: verify
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - uses: actions/download-artifact@v8
+        with:
+          name: template
+          path: dist
+      - run: >-
+          npx --yes clawhub@0.26.0 package publish dist/project-briefing.tgz
+          --family template --display-name "Project Briefing"
+          --source-repo "$GITHUB_REPOSITORY" --source-commit "$GITHUB_SHA"
+          --wait --wait-timeout 1800

@@ -18,8 +18,10 @@ use recent work and the reader's interests to recommend a focus or budget; agree
 meaningful trade-offs with them.
 
 Save the repository and interests using [configuration.md](references/configuration.md),
-then follow Research, Write and Finish below for the first briefing. Use the same
-reference for later repository, focus or schedule changes.
+then follow Research, Write and Finish below for the first briefing. Afterwards,
+configure the [daily job](references/configuration.md#daily-job) and remove
+`BOOTSTRAP.md` from the installed workspace. Use the configuration reference for
+later repository, focus or schedule changes.
 
 ## Research
 
@@ -47,15 +49,10 @@ inspected code or designs support a relationship that is easier to show.
 
 ## Finish
 
-Follow [Publish or skip](references/commands.md#publish-or-skip). Return a short
-introduction with the article link, or save the reason nothing merits publication
-in SQLite. Keep previous articles and artwork; add dated corrections when needed.
-Scheduled runs return new work or a new blocker; otherwise `NO_REPLY`.
-The scheduler owns notification delivery.
-
-For first-time setup, explain if no article was needed and confirm the installed daily job's
-schedule and destination with the reader. Explain any missing access. Once the
-first briefing and follow-up are arranged, remove `BOOTSTRAP.md` from the installed
-workspace; retain the template copy.
+Follow [Publish or skip](references/commands.md#publish-or-skip). After publication,
+[update the journal view](references/commands.md#present-the-journal). Introduce
+the new article briefly, or explain during setup if nothing merits publication.
+Keep previous articles and artwork; add dated corrections when needed.
+Scheduled runs update the journal and return `NO_REPLY` unless a blocker needs attention.
 
 For failed runs, follow [Recovery](references/commands.md#recovery).

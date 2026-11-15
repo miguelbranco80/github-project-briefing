@@ -116,6 +116,14 @@ class JournalTests(unittest.TestCase):
             self.assertIn("<style>" + stylesheet + "</style>", html)
             self.assertNotIn('rel="stylesheet"', html)
         self.assertIn('href="../../index.html"', second_html)
+        reader = Path(second["reader"]).read_text()
+        pages = json.loads(reader.split('<script type="application/json" id="journal-pages">', 1)[1].split('</script>', 1)[0])
+        for entry in (built, second):
+            route = entry["post_url"] + "index.html"
+            self.assertIn(route, pages)
+            self.assertIn('href="#' + route + '"', pages["/archive/index.html"]["html"])
+        self.assertIn('src="data:image/svg+xml;base64,', pages[built["post_url"] + "index.html"]["html"])
+        self.assertIn('href="#/index.html"', pages[second["post_url"] + "index.html"]["html"])
         self.assertEqual(hashlib.sha256(Path(built["article"]).read_bytes()).hexdigest(), article_hash)
         self.assertEqual(hashlib.sha256(art.read_bytes()).hexdigest(), art_hash)
         with sqlite3.connect(self.state / "activity.sqlite") as db:
@@ -125,6 +133,7 @@ class JournalTests(unittest.TestCase):
         self.assertEqual(retry["status"], "reviewed")
         self.assertEqual(retry["output_dir"], built["output_dir"])
         self.assertEqual(retry["post_url"], built["post_url"])
+        self.assertEqual(retry["reader"], second["reader"])
         self.assertEqual(snapshot(site), before)
 
     def test_code_examples_are_literal_even_in_existing_journals(self):

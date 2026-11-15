@@ -14,15 +14,16 @@ openclaw templates add .
 ```
 
 Name a repository and what interests you. The agent researches the project,
-produces the first briefing and confirms the daily follow-up. The template includes
-one job at 09:00 UTC; notification delivery is handled by OpenClaw.
+produces the first briefing and opens its journal on the session dashboard. Setup
+enables the installed 09:00 UTC daily job to update that journal. Notifications
+are optional.
 
 ## How it works
 
 1. Check workload, agree scope and collect evidence into the project's `activity.sqlite`.
 2. Review unreviewed collections and research the changes that matter.
 3. Write an article in `journal/src/posts/`, or record why none is needed in SQLite.
-4. Build the project's static HTML journal in `journal/_site/`; open `index.html` to browse it.
+4. Build the static blog and update its dashboard reader, including earlier articles.
 
 Collection and review bookkeeping stays in SQLite. Existing `run-N.md` and
 `quiet-N.md` notes are imported before removal; articles and evidence are preserved.
@@ -46,4 +47,4 @@ python3 tests/check_archive.py dist/project-briefing-0.2.5.tgz
 
 Tests use fake GitHub responses and exercise SQLite history, migration, review
 decisions, collection limits, article builds and project isolation. Verify installation,
-file preview and scheduled delivery in the target OpenClaw environment.
+dashboard navigation and scheduled updates in the target OpenClaw environment.

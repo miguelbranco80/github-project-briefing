@@ -10,6 +10,8 @@ workspace:
       path: skills/project-briefing/SKILL.md
     - source: skills/project-briefing/assets/journal/build.py
       path: skills/project-briefing/assets/journal/build.py
+    - source: skills/project-briefing/assets/journal/reader.cjs
+      path: skills/project-briefing/assets/journal/reader.cjs
     - source: skills/project-briefing/assets/journal/eleventy.config.cjs
       path: skills/project-briefing/assets/journal/eleventy.config.cjs
     - source: skills/project-briefing/assets/journal/package-lock.json
@@ -46,8 +48,9 @@ mcpServers: {}
 automations:
   - id: daily-project-briefing
     name: Daily project briefing
+    enabled: false
     schedule: { cron: "0 9 * * *", timezone: UTC }
-    session: isolated
+    session: main
     message: >-
       Run the scheduled project briefing using skills/project-briefing/SKILL.md.
 ---

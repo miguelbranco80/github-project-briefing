@@ -47,7 +47,7 @@ data/owner--repo/
     drafts/            Markdown articles being written
     src/posts/         published Markdown articles
     src/assets/        styles and artwork
-    _site/             generated static HTML
+    _site/             static blog and self-contained reader.html
 ```
 
 SQLite is a local file; it needs no database server. Its `runs` table records each
@@ -63,11 +63,16 @@ focus or budgets with the reader. A changed filter begins a new baseline;
 otherwise collection continues from the previous checkpoint with a 24-hour overlap.
 Keep background knowledge in the journal; do not copy these settings into research notes.
 
-## Schedule and delivery
+## Daily job
 
-Reuse the installed daily job. Confirm its schedule and configure notification
-delivery to the destination agreed with the reader; OpenClaw installs template
-jobs without channel delivery. Check the scheduler's history for delivery results.
+The template installs a disabled daily job at 09:00 UTC in this agent's main
+session. After setup, keep its prompt and bind it to the session owning the journal,
+record the working model and account, and allow `show_widget` alongside the
+research tools. Enable it and tell the reader its schedule. Check the run history
+for authentication or execution failures before claiming scheduled updates work.
+
+The job maintains the journal with notification delivery off. Configure a
+notification destination only when the reader asks for notifications.
 
 ## Runtime requirements
 

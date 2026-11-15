@@ -65,6 +65,7 @@ def build(site):
         staged = temporary / "site"
         subprocess.run(["node", str(command), f"--config={ROOT / 'eleventy.config.cjs'}", f"--output={staged}"], cwd=site, check=True, timeout=120)
         pages, links = check_site(staged)
+        subprocess.run(["node", str(ROOT / "reader.cjs"), str(staged)], check=True, timeout=120)
         output, previous = site / "_site", temporary / "previous"
         if output.exists():
             output.rename(previous)

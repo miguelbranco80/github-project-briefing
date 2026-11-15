@@ -56,7 +56,8 @@ python3 scripts/journal.py publish --workspace WORKSPACE --repo OWNER/REPO --run
 ```
 
 Publication builds the project's static site, saves the article path in SQLite
-and returns the article’s `html` path and the journal’s `output_dir`. When nothing merits an article, instead run:
+and returns the article’s `html` path, the journal’s `output_dir` and its
+self-contained `reader` path. When nothing merits an article, instead run:
 
 ```sh
 python3 scripts/journal.py skip --workspace WORKSPACE --repo OWNER/REPO --run RUN --reason 'Only routine dependency updates; no relevant behavior change.'
@@ -67,10 +68,15 @@ removes the run from `pending_runs`; retrying returns the saved decision.
 
 ## Present the journal
 
-Link the returned `html` file for OpenClaw's file preview. To browse the whole
-journal, open `OUTPUT_DIR/index.html` in a browser with access to that folder;
-links and assets are relative, so no server is required. OpenClaw's embedded
-preview displays individual pages but does not navigate between local HTML files.
+Pass the complete contents of the returned `reader` file unchanged to
+`show_widget` as `widget_code`, with `pin: true`, `size: "full"`, the repository
+as `title`, and a lowercase `journal-OWNER--REPO` name (at most 64 characters).
+Use the same name and session for later updates. Forward file contents through
+Code Mode when available instead of copying the HTML through the model.
+
+The reader includes the existing pages, styles and artwork; archive navigation
+stays inside the widget. Create it only after an article exists. The static blog
+in `OUTPUT_DIR/index.html` remains available for ordinary browsers.
 
 ## Recovery
 
@@ -84,4 +90,5 @@ python3 scripts/collect.py --repo OWNER/REPO --state-dir STATE --pending
 
 For a dated correction or requested layout change, edit the existing journal and
 rebuild with `python3 assets/journal/build.py STATE/journal`. This preserves article
-URLs. Inspect the scheduler's history for notification failures before resending.
+URLs. Present the rebuilt reader to update the dashboard. Inspect the scheduler's
+history for failed runs before retrying.

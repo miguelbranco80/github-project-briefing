@@ -3,10 +3,14 @@ const path = require("node:path");
 const posthtml = require("posthtml");
 
 module.exports = function (eleventyConfig) {
+  const stylesheet = fs.readFileSync("src/assets/style.css", "utf8");
   eleventyConfig.addTransform("relative-links", async function (content) {
     if (!this.page.outputPath.endsWith(".html")) return content;
     const current = this.page.url.endsWith("/") ? this.page.url + "index.html" : this.page.url;
     return (await posthtml().use((tree) => tree.walk((node) => {
+      if (node.tag === "link" && node.attrs?.rel === "stylesheet" && node.attrs.href === "/assets/style.css") {
+        return { tag: "style", content: [stylesheet] };
+      }
       for (const key of ["href", "src"]) {
         const ref = node.attrs?.[key];
         if (!ref || /^(?:#|\/\/|[a-z][a-z0-9+.-]*:)/i.test(ref)) continue;

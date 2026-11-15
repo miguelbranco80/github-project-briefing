@@ -109,10 +109,13 @@ class JournalTests(unittest.TestCase):
             self.assertIn(".." + entry["post_url"] + "index.html", archive)
             self.assertTrue((site / entry["post_url"].lstrip("/") / "index.html").is_file())
             self.assertEqual(Path(entry["html"]), site / entry["post_url"].lstrip("/") / "index.html")
+        stylesheet = (Path(second["site_dir"]) / "src/assets/style.css").read_text()
         for page in site.rglob("*.html"):
-            self.assertNotRegex(page.read_text(), r'(?:href|src)="/(?!/)')
+            html = page.read_text()
+            self.assertNotRegex(html, r'(?:href|src)="/(?!/)')
+            self.assertIn("<style>" + stylesheet + "</style>", html)
+            self.assertNotIn('rel="stylesheet"', html)
         self.assertIn('href="../../index.html"', second_html)
-        self.assertIn('href="../../assets/style.css"', second_html)
         self.assertEqual(hashlib.sha256(Path(built["article"]).read_bytes()).hexdigest(), article_hash)
         self.assertEqual(hashlib.sha256(art.read_bytes()).hexdigest(), art_hash)
         with sqlite3.connect(self.state / "activity.sqlite") as db:

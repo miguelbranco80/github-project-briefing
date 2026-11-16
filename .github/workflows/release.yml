@@ -77,5 +77,5 @@ jobs:
       - run: >-
           npx --yes clawhub@0.26.0 package publish ./dist/project-briefing.tgz
           --family template --display-name "Project Briefing"
-          --source-repo "$GITHUB_REPOSITORY" --source-commit "$GITHUB_SHA"
+          --source-repo "$GITHUB_REPOSITORY" --source-ref "$GITHUB_REF" --source-commit "$GITHUB_SHA"
           --wait --wait-timeout 1800

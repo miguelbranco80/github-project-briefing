@@ -1,42 +1,52 @@
 # Project Briefing
 
-An OpenClaw agent that researches GitHub projects and saves source-linked
-engineering articles. Each project keeps its evidence and articles in its own folder.
+Follow a GitHub project through source-linked engineering briefings. The agent
+researches code changes, proposals and discussions, explains what matters to you,
+and answers follow-up questions in chat. GitHub access is read-only.
 
 ## Start
 
-Requires an OpenClaw source build with `templates`, Python 3.10+ on POSIX,
-and authenticated `gh`.
+Requires an OpenClaw source build with Templates enabled and a connected model.
+The gateway host needs Python 3.10+ on POSIX and authenticated `gh` with access to
+the repositories you want to follow.
+
+```sh
+openclaw templates add @miguelbranco80/project-briefing-template
+```
+
+Open the new agent's chat and name a repository. For example:
+
+> Follow openclaw/openclaw. I'm interested in agent templates and automation.
+
+The agent checks recent activity, agrees a useful scope with you and writes the
+first briefing. Setup then enables daily research at 09:00 in the gateway host's
+timezone. Keep the gateway running for scheduled research. New findings and a
+link to the saved article appear in the setup chat; runs with no news stay quiet.
+
+Ask follow-up questions there, such as “What changed since the last briefing?”
+or “Explain the automation changes in more detail.”
+
+## How it works
+
+The agent collects PRs, commits and releases within the agreed scope, then reads
+the relevant code and discussions to turn related changes into stories. Each
+briefing links its sources and distinguishes shipped changes from proposals.
+
+Each project keeps its evidence and review history in `activity.sqlite` and its
+dated Markdown briefings in `articles/`, inside its own workspace folder.
+Earlier articles remain available for follow-up questions. No database server
+or website is required.
+
+[Workflow](https://github.com/miguelbranco80/project-briefing-template/blob/main/skills/project-briefing/SKILL.md)
+and [configuration](https://github.com/miguelbranco80/project-briefing-template/blob/main/skills/project-briefing/references/configuration.md).
+
+## Development
+
+From the [source repository](https://github.com/miguelbranco80/project-briefing-template):
 
 ```sh
 gh repo clone miguelbranco80/project-briefing-template
 cd project-briefing-template
-openclaw templates add .
-```
-
-Name a repository and what interests you. The agent researches it, saves the first
-article and discusses the findings in chat. Setup enables daily research at 09:00
-in the gateway host's timezone. New briefings appear in the same chat; ask follow-up
-questions there. Runs with no news stay quiet.
-
-## How it works
-
-1. Check workload, agree scope and collect evidence into the project's `activity.sqlite`.
-2. Review unreviewed collections and research the changes that matter.
-3. Save a Markdown article in `articles/`, or record why none is needed in SQLite.
-4. Read and discuss saved articles in chat.
-
-Collection and review bookkeeping stays in SQLite; articles stay in Markdown.
-
-[SKILL.md](skills/project-briefing/SKILL.md) owns the workflow;
-[BOOTSTRAP.md](BOOTSTRAP.md) points to its setup section. See
-[configuration](skills/project-briefing/references/configuration.md) for project
-settings and storage, and [commands](skills/project-briefing/references/commands.md)
-for operation. Source changes take effect when installed in an agent.
-
-## Verify
-
-```sh
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 openclaw templates validate .
 openclaw templates dev .
@@ -50,4 +60,4 @@ decisions, collection limits, saved articles and project isolation.
 
 ## License
 
-[MIT](LICENSE).
+[MIT](https://github.com/miguelbranco80/project-briefing-template/blob/main/LICENSE).

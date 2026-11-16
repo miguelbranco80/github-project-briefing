@@ -5,6 +5,10 @@ agent:
   name: Project Briefing
   description: Researches GitHub projects, saves engineering briefings and discusses what's changed.
 categories: [research]
+workspace:
+  files:
+    - source: README.md
+      path: README.md
 skills:
   - path: skills/project-briefing
 mcpServers: {}

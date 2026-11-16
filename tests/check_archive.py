@@ -20,7 +20,7 @@ def check(artifact):
             ["git", "ls-files", "--", "skills/project-briefing"], cwd=SOURCE, text=True,
         ).splitlines()
         expected = {"package/" + name for name in selected}
-        expected.update({"package/CLAW.md", "package/BOOTSTRAP.md", "package/package.json", "package/LICENSE"})
+        expected.update({"package/CLAW.md", "package/BOOTSTRAP.md", "package/package.json", "package/LICENSE", "package/README.md"})
         if files != expected:
             raise ValueError(f"Archive selection mismatch: {files ^ expected}")
         env = dict(os.environ, PROJECT_BRIEFING_TEST_PACKAGE=str(package))

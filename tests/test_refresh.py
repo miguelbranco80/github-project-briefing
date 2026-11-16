@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import unittest
 
-spec=importlib.util.spec_from_file_location('refresh',Path(os.environ.get('PROJECT_BRIEFING_TEST_PACKAGE', Path(__file__).parents[1]))/'skills/project-briefing/scripts/refresh.py')
+spec=importlib.util.spec_from_file_location('refresh',Path(os.environ.get('GITHUB_PROJECT_BRIEFING_TEST_PACKAGE', Path(__file__).parents[1]))/'skills/github-project-briefing/scripts/refresh.py')
 r=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(r)
 

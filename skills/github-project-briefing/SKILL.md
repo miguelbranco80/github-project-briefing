@@ -1,9 +1,9 @@
 ---
-name: project-briefing
+name: github-project-briefing
 description: Research GitHub projects, save engineering briefings and discuss changes with the reader.
 ---
 
-# Project briefing
+# GitHub project briefing
 
 Help the reader understand engineering work they would otherwise have to piece
 together from code and discussion. GitHub access is read-only.

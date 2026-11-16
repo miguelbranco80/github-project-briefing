@@ -10,8 +10,8 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
-ROOT = Path(os.environ.get("PROJECT_BRIEFING_TEST_PACKAGE", Path(__file__).parents[1]))
-SCRIPT = ROOT / "skills/project-briefing/scripts/collect.py"
+ROOT = Path(os.environ.get("GITHUB_PROJECT_BRIEFING_TEST_PACKAGE", Path(__file__).parents[1]))
+SCRIPT = ROOT / "skills/github-project-briefing/scripts/collect.py"
 spec = importlib.util.spec_from_file_location("collect", SCRIPT)
 c = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(c)

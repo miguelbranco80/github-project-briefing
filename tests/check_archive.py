@@ -17,13 +17,13 @@ def check(artifact):
             files = {m.name for m in archive.getmembers() if m.isfile()}
         package = temporary / "package"
         selected = subprocess.check_output(
-            ["git", "ls-files", "--", "skills/project-briefing"], cwd=SOURCE, text=True,
+            ["git", "ls-files", "--", "skills/github-project-briefing"], cwd=SOURCE, text=True,
         ).splitlines()
         expected = {"package/" + name for name in selected}
         expected.update({"package/CLAW.md", "package/BOOTSTRAP.md", "package/package.json", "package/LICENSE", "package/README.md"})
         if files != expected:
             raise ValueError(f"Archive selection mismatch: {files ^ expected}")
-        env = dict(os.environ, PROJECT_BRIEFING_TEST_PACKAGE=str(package))
+        env = dict(os.environ, GITHUB_PROJECT_BRIEFING_TEST_PACKAGE=str(package))
         subprocess.run(["python3", "-m", "unittest", "discover", "-s", str(SOURCE / "tests"),
                         "-v"], env=env, check=True, timeout=180)
         print(f"Verified {len(files)} archive files and the briefing workflow from extracted package code.")

@@ -1,4 +1,4 @@
-# Project Briefing
+# GitHub Project Briefing
 
 Follow a GitHub project through source-linked engineering briefings. The agent
 researches code changes, proposals and discussions, explains what matters to you,
@@ -11,7 +11,7 @@ The gateway host needs Python 3.10+ on POSIX and authenticated `gh` with access 
 the repositories you want to follow.
 
 ```sh
-openclaw templates add @miguelbranco80/project-briefing-template
+openclaw templates add @miguelbranco80/github-project-briefing
 ```
 
 Open the new agent's chat and name a repository. For example:
@@ -37,22 +37,22 @@ dated Markdown briefings in `articles/`, inside its own workspace folder.
 Earlier articles remain available for follow-up questions. No database server
 or website is required.
 
-[Workflow](https://github.com/miguelbranco80/project-briefing-template/blob/main/skills/project-briefing/SKILL.md)
-and [configuration](https://github.com/miguelbranco80/project-briefing-template/blob/main/skills/project-briefing/references/configuration.md).
+[Workflow](https://github.com/miguelbranco80/github-project-briefing/blob/main/skills/github-project-briefing/SKILL.md)
+and [configuration](https://github.com/miguelbranco80/github-project-briefing/blob/main/skills/github-project-briefing/references/configuration.md).
 
 ## Development
 
-From the [source repository](https://github.com/miguelbranco80/project-briefing-template):
+From the [source repository](https://github.com/miguelbranco80/github-project-briefing):
 
 ```sh
-gh repo clone miguelbranco80/project-briefing-template
-cd project-briefing-template
+gh repo clone miguelbranco80/github-project-briefing
+cd github-project-briefing
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 openclaw templates validate .
 openclaw templates dev .
 mkdir -p dist
-openclaw templates build . --out dist/project-briefing.tgz
-python3 tests/check_archive.py dist/project-briefing.tgz
+openclaw templates build . --out dist/github-project-briefing.tgz
+python3 tests/check_archive.py dist/github-project-briefing.tgz
 ```
 
 Tests use fake GitHub responses and exercise SQLite history, review
@@ -60,4 +60,4 @@ decisions, collection limits, saved articles and project isolation.
 
 ## License
 
-[MIT](https://github.com/miguelbranco80/project-briefing-template/blob/main/LICENSE).
+[MIT](https://github.com/miguelbranco80/github-project-briefing/blob/main/LICENSE).

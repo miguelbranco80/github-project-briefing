@@ -63,7 +63,7 @@ Keep background knowledge in the articles; do not copy these settings into resea
 
 After the first briefing, create a daily automation from this conversation:
 09:00 in the gateway host's timezone, isolated execution, announce delivery,
-and “Run the scheduled project briefing using skills/project-briefing/SKILL.md.”
+and “Run the scheduled project briefing using skills/github-project-briefing/SKILL.md.”
 Use the working model, runtime and account and allow the research tools. Leave external
 delivery coordinates unset so results return here. Reuse this conversation's
 briefing job if setup is repeated. Tell the reader the schedule and timezone.

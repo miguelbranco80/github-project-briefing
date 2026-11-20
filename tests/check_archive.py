@@ -21,6 +21,7 @@ def check(artifact):
         ).splitlines()
         expected = {"package/" + name for name in selected}
         expected.update({"package/CLAW.md", "package/BOOTSTRAP.md", "package/package.json", "package/LICENSE", "package/README.md"})
+        expected.add("package/assets/icon.png")
         if files != expected:
             raise ValueError(f"Archive selection mismatch: {files ^ expected}")
         env = dict(os.environ, GITHUB_PROJECT_BRIEFING_TEST_PACKAGE=str(package))

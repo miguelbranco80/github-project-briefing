@@ -4,11 +4,15 @@ agent:
   id: github-project-briefing
   name: GitHub Project Briefing
   description: Researches GitHub projects, saves engineering briefings and discusses what's changed.
+  identity:
+    avatar: avatars/github-project-briefing.png
 categories: [research]
 workspace:
   files:
     - source: README.md
       path: README.md
+    - source: assets/icon.png
+      path: avatars/github-project-briefing.png
 skills:
   - path: skills/github-project-briefing
 mcpServers: {}
